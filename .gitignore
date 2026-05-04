@@ -1,0 +1,68 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build / package
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+.env.*
+*.key
+
+# Generated outputs
+outputs/
+debug_artifacts/
+test_out.gmd
+*.tmp
+
+# AI/cache/runtime data
+.ai_cache/
+.cache/
+dataset/cache/
+dataset/learning/exports/
+dataset/learning/debug/
+dataset/eval/reports/
+
+# Local datasets / large references
+base/gd_decompile/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.aider*
+
+artifacts/
+
+artifacts/
+release_artifacts/
+dataset/local_coder_memory/outputs/
+
+dataset/*
+!dataset/.gitkeep
+*.gmd
+*.wav
+*.mp3
+*.ogg
+*.zip*.pyc
+*.pyo
+src/*.egg-info/
+
+# Claude Code worktrees and local agent state
+.claude/
