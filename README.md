@@ -1,13 +1,16 @@
 # gmdgen
 
-AI-based Geometry Dash level (`.gmd`) generator.
+gmdgen is an Ollama-only local AI Geometry Dash GMD generator/editor.
+No external API key is required.
+Gemini and OpenAI are not runtime providers.
+Ollama generates structured JSON plans, not raw .gmd save strings.
 
-The runtime AI provider is local Ollama only.
-Deterministic generation is supported without Ollama.
+## Installation & Usage
+Recommended model: qwen2.5-coder:7b (Optional alias: gmdgen-coder-final)
+Run GUI: `python -m gmdgen`
 
-## License
+## Dataset
+dataset/ is intentionally empty in the release; users fill dataset/ themselves.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version. See [LICENSE](LICENSE).
+## Verification
+Run tests: `python -m pytest -q` or `tools/local_ai/verify_final_release.ps1`
