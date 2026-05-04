@@ -1,0 +1,83 @@
+artifact_path: artifacts/model.json
+output_dir: outputs
+output_name: generated_level
+num_objects: null
+temperature: 1.0
+top_k: 20
+seed: 42
+prefer_visible_ids: true
+write_decoded_preview: true
+max_generation_steps: 80000
+auto_object_floor: 1200
+auto_object_cap: 12000
+min_visible_objects: 200
+prompt: null
+prompt_strength: 0.65
+generated_author: gmdgen
+safe_simplify_objects: false
+candidate_pool_size: 1200
+deliberation_width: 128
+selection_temperature: 0.05
+prompt_weight: 5.0
+anchor_weight: 8.0
+markov_weight: 1.2
+core_weight: 0.9
+intro_weight: 3.0
+transition_id_weight: 3.5
+transition_dominant_weight: 1.6
+learned_transition_weight: 4.0
+same_level_penalty: 0.95
+generation_passes: 24
+repair_level: true
+repair_x_monotone: true
+repair_group_ids: true
+repair_orphan_triggers: true
+repair_density: true
+repair_grid_snap: false
+repair_duplicates: true
+repair_max_density_per_grid: 8
+repair_grid_unit: 30
+
+# Audio-conditioned generation.
+# When audio_file is set, generation uses the structured audio/GD pipeline
+# instead of the Markov/chunk-only path.
+audio_file: null
+target_duration: null
+style_reference_level: null
+difficulty: normal
+sync_strength: 0.75
+audio_sync_strength: 0.75
+object_budget: 1200
+safe_mode: true
+editor_safe_mode: true
+start_speed: normal
+song_offset: 0.0
+allow_speed_portals: false
+allow_triggers: true
+max_group_id: 9999
+max_events_per_beat: 2
+beat_snap_tolerance: 0.08
+onset_event_threshold: 0.35
+section_change_sensitivity: 0.5
+energy_density_scale: 1.0
+drop_emphasis: 1.0
+speed_portal_policy: conservative  # none/conservative/musical/aggressive
+trigger_safety_level: conservative
+group_id_policy: sequential        # sequential/reusable/section_scoped
+editor_roundtrip_check: true
+
+# ── Template-edit (conditional) mode ─────────────────────────────────────────
+# Set use_template_edit: true to keep a real level's structure intact
+# and only swap style (structure/decoration objects).
+# Triggers, portals, group-linked objects are always preserved.
+#
+# Example:
+#   use_template_edit: true
+#   template_level: "dataset/Sonic Wave.gmd"
+use_template_edit: false
+template_level: null
+style_swap_ratio: 0.35      # fraction of structure/decoration objects to replace
+template_jitter_x: 0        # ±pixels to jitter x position after swap (0 = off)
+template_jitter_y: 8        # ±pixels to jitter y position after swap
+template_swap_structure: true
+template_swap_decoration: true

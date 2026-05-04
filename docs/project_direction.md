@@ -1,0 +1,11 @@
+# Project Direction
+- Audio Analysis
+- Ollama Planning
+- Internal Representation
+- Materializer
+- Repairer
+- Validator
+- QualityGate
+- SaveResult
+- GUI
+- Local Learning Memory

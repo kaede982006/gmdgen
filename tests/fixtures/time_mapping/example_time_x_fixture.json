@@ -1,0 +1,39 @@
+{
+  "name": "synthetic_normal_speed_fixture",
+  "source": "synthetic_approximate",
+  "notes": "Approximate fixture generated from current mapper constants; replace with Geode LevelTools exports for real parity.",
+  "start_speed": "normal",
+  "song_offset": 0.25,
+  "speed_objects": [
+    {
+      "time": 1.25,
+      "x": 311.58,
+      "speed_state": "fast",
+      "object_id": "202",
+      "source": "synthetic_approximate"
+    }
+  ],
+  "samples": [
+    {
+      "time": 0.75,
+      "expected_x": 155.79,
+      "tolerance": 0.00001,
+      "source": "synthetic_approximate",
+      "notes": "normal speed before portal"
+    },
+    {
+      "time": 2.0,
+      "expected_x": 602.145,
+      "tolerance": 0.00001,
+      "source": "synthetic_approximate",
+      "notes": "normal then fast segment"
+    },
+    {
+      "x": 602.145,
+      "expected_time": 2.0,
+      "tolerance": 0.00001,
+      "source": "synthetic_approximate",
+      "notes": "inverse mapping"
+    }
+  ]
+}

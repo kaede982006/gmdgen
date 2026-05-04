@@ -1,0 +1,37 @@
+dataset_dir: dataset
+artifact_path: artifacts/model.json
+
+# ── Markov model ──────────────────────────────────────────────────────────────
+# order=4 means the model sees the last 4 OBJ tokens to predict the next.
+# Higher order → better local coherence, but sparser transition table.
+markov_order: 4
+
+# ── Dataset filtering ─────────────────────────────────────────────────────────
+# null = no limit (all decoded records are used)
+min_objects_per_level: null
+max_objects_per_level: null
+
+# ── Reproducibility ───────────────────────────────────────────────────────────
+seed: 42
+log_skipped_files: false
+
+# ── Object prototype sampling ─────────────────────────────────────────────────
+# How many raw object strings to store per object ID.
+# Used by the fallback generator when chunk library misses.
+max_prototypes_per_id: 120
+max_y_samples_per_id: 300
+max_delta_samples: 200000
+
+# ── Chunk library ─────────────────────────────────────────────────────────────
+# Chunks are contiguous windows of objects used for generation.
+# Chunks that cross a portal boundary are discarded (section-aware, Ch.9 §9.2).
+chunk_size: 96          # objects per chunk window
+chunk_stride: 12        # sliding step between windows
+max_chunks_per_level: 260
+min_chunk_objects: 8    # discard windows with fewer valid objects
+
+# ── Hold-out validation ───────────────────────────────────────────────────────
+# Used by `gmdgen validate` and `scripts/validate.py`.
+# The split is deterministic (seed-based) — Goodfellow Ch.5 §5.3.
+val_ratio: 0.2          # fraction of loaded records used as validation
+val_seed: 42            # RNG seed for the split (must match training seed)
