@@ -66,3 +66,6 @@ src/*.egg-info/
 
 # Claude Code worktrees and local agent state
 .claude/
+
+# Release artifacts (built locally, not tracked)
+release_assets/
