@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.generate.quality_gate import QualityGateThresholds, QualityGateResult, evaluate_quality_gate

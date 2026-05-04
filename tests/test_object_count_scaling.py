@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 """Verify that high object counts can be reached without destroying diversity

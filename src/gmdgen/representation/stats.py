@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Representation-level statistics for feature-token sequences.
 
 Re-exports the legacy stats from gmdgen.features.stats and adds

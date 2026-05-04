@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 import json
 import random
 from dataclasses import asdict, dataclass, field

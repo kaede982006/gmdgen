@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
 from pathlib import Path
 from gmdgen.eval.suite import QualityEvalSuite

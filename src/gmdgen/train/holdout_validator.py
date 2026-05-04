@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Hold-out validation pipeline.
 
 Goodfellow Ch.5 §5.3 "Hyperparameters and Validation Sets":

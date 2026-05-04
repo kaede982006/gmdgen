@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.ai.schemas import convert_ai_response_to_plans, parse_ai_level_plan_response

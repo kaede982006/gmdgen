@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Multi-term scoring function for generated GD level objects.
 
 Goodfellow §8.1 "How Learning Differs from Pure Optimization":

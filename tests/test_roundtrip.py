@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.generate.scoring import compute_audio_conditioned_score

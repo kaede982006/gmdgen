@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from gmdgen.validation.code_validation import (
     CodeValidationReport,
     CodeValidationResult,

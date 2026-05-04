@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Representation learning utilities for GD level objects.
 
 This package supersedes the legacy gmdgen.features package.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 import json
 from gmdgen.gd.geode_protocol import GeodeIPCRequest, GeodeIPCResponse, GeodeBridgeConfig
 from gmdgen.gd.geode_external_bridge import ExternalGeodeBridge

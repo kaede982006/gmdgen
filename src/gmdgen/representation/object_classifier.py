@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Rule-based GD object classifier.
 
 Goodfellow Ch.1 §1.0 "feature engineering":

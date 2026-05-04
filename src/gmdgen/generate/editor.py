@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Conditional editing mode — base level + learned delta.
 
 Goodfellow Ch.7 §7.4 "Dataset Augmentation" + Ch.19 §19.3 "MAP Inference":

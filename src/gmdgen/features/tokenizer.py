@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.data.preprocess import split_level_objects

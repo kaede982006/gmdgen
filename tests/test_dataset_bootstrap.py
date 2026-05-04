@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from pathlib import Path
 from gmdgen.dataset.bootstrap import initialize_dataset_structure
 from gmdgen.dataset.reference_quality import evaluate_reference_levels

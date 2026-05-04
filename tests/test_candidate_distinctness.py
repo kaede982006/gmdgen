@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 """Tests for Phase 6: Candidate generation must produce distinct candidates.

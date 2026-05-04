@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Retired legacy Ollama test module.
 
 This project is now Ollama-only. The old Ollama-specific assertions are kept

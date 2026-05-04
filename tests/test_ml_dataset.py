@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.eval.ml_dataset import FeatureRecord, LabelRecord, build_feature_record_from_generation, build_label_record_from_feedback

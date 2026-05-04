@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Feature-aware tokeniser for GD level objects.
 
 Goodfellow Ch.15 §15.3 "Semi-Supervised Disentangling of Causal Factors":

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 import json
 from pathlib import Path
 from gmdgen.generate.generator import generate_from_config

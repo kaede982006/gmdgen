@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 import pytest
 from gmdgen.diagnostics.string_sanitizer import MetadataSanitizer
 from gmdgen.generate.quality_gate import evaluate_quality_gate, QualityGateThresholds

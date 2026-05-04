@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Any
 
 def recommend_tuning(feedback_tags: list[str]) -> dict[str, Any]:

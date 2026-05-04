@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """P0 focused tests: save path, save result, quality gate failure classification."""
 from __future__ import annotations
 

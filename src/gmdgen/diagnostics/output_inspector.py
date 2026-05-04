@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from gmdgen.diagnostics.quality_failure import QualityFailureReason, QualityFailure
 from gmdgen.diagnostics.string_sanitizer import MetadataSanitizer
 

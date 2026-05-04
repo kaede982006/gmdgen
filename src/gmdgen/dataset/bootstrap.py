@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from pathlib import Path
 
 def initialize_dataset_structure(dataset_dir: str | Path) -> dict[str, list[str]]:

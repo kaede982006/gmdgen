@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from gmdgen.learning.tuning import recommend_tuning
 
 def test_tuning_recommends_drop_emphasis_for_bad_drop():

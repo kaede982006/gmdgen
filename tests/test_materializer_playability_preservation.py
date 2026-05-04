@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from gmdgen.gd.plans import ObjectPlan, SectionPlan, plans_to_level_objects

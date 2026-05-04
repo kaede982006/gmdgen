@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Feature extraction utilities.
 
 Legacy package kept for backward compatibility.
