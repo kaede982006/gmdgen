@@ -7,7 +7,35 @@ Versioning.
 
 ## [0.1.0] - 2026-05-05
 
-Clean GPL-3.0 baseline with the algorithmic redesign already applied.
+Clean GPL-3.0 baseline with the algorithmic redesign already applied,
+plus v2.3 patches: HSR generation, invariants, observability.
+
+### Added (v2.3)
+- `gmdgen.observability.log` — structured JSONL logger with
+  `@logged(phase, step)` decorator and per-event memory/elapsed.
+- `gmdgen.observability.progress` — dependency-free progress bar.
+- `gmdgen.types` — `LevelPlan`, `Section`, `Transitions`,
+  `LEVEL_PLAN_JSON_SCHEMA` (Hierarchical Structural Representation).
+- `gmdgen.patterns` — pattern library (126 synthetic patterns covering
+  all 21 mode×difficulty cells) + `build_index` + `pick_pattern`.
+- `gmdgen.generate.expand` — deterministic `expand_plan(plan, seed)`.
+- `gmdgen.generate.invariants` — I-1..I-5 + R0 with `assert_invariants`
+  and `must_not_be_empty` (the 46258-spray fix).
+- `gmdgen.generate.play_solver` — heuristic `simulate_play` returning
+  `PlayReport(success, jumpable_path_ratio, ...)`.
+- `gmdgen.generate.hsr_triggers` — section-boundary trigger insertion
+  satisfying I-2 by construction.
+- 57 new tests covering: observability log/decorator, HSR types,
+  pattern library coverage, invariants, expander determinism, play
+  solver, no-object-spray regression.
+- `docs/refactor/REPORT_QUALITY.md` — fail-mode analysis + invariants table.
+- `docs/refactor/REPORT_LOGGING.md` — schema + sample output.
+
+### Changed (v2.3)
+- Pattern synthesizer hazard density capped to keep spacing ≥ 2.5 beats
+  (above `MIN_REACTION_X` in the play solver).
+- README adds "Quality model (HSR)" and "Logging & observability"
+  sections describing the new pipeline.
 
 ### Added
 - Diverse safe decoration palette (≥30 unique IDs, replaces the previous

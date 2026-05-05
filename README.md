@@ -94,6 +94,10 @@ curl -s http://127.0.0.1:11434/api/tags | python -m json.tool
 | `GMDGEN_DATASET_DIR` | `dataset` | Reference levels directory used by the learning store |
 | `GMDGEN_HEADLESS` | unset | Set to `1` to force headless mode (skip Tk init) |
 | `RUN_OLLAMA_LIVE_TESTS` | unset | Set to `1` to enable optional live-Ollama test paths (off in CI) |
+| `GMDGEN_CACHE_DIR` | `~/.cache/gmdgen` | Base directory for logs, LLM disk cache, and other cache artifacts |
+| `GMDGEN_NO_PROGRESS` | unset | Set to `1` to disable progress bars even in TTYs |
+| `GMDGEN_LOG_LEVEL` | `1` | 0=quiet, 1=normal, 2=verbose, 3=trace |
+
 
 Model selection and other generation parameters (Ollama model name, candidate
 count, object multiplier, quality mode, etc.) are configured through the GUI
@@ -136,6 +140,23 @@ python -m gmdgen          # GUI
 python -m pytest -q       # full test suite (no live Ollama required)
 ```
 
+## Quality model (HSR)
+
+`gmdgen` uses **Hierarchical Structural Representation**: the AI emits
+only a `LevelPlan` (~few hundred tokens, JSON-schema enforced); a
+deterministic expander then builds the level from a pattern library
+covering all 7 game modes × 3 difficulty tiers (≥6 patterns per cell).
+Five structural invariants (object count band, trigger floor, ground
+coverage, jumpable path, type variety) are enforced before save —
+candidates that fail are rejected, never repaired into existence.
+
+## Logging & observability
+
+Set `GMDGEN_LOG_LEVEL` to one of `0` (quiet), `1` (normal — default),
+`2` (verbose), `3` (trace). Structured JSONL logs are written to
+`~/.cache/gmdgen/logs/<run_id>.jsonl` for every run. Progress bars
+auto-silence in non-TTY environments.
+
 ## Dataset
 
 `dataset/` is intentionally empty in the released package; users provide
@@ -156,4 +177,4 @@ the Free Software Foundation, either version 3 of the License, or
 python -m pytest -q
 ```
 
-Expected: `607 passed, 17 skipped`.
+Expected: `664 passed, 17 skipped`.
