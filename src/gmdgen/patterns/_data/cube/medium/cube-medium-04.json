@@ -1,0 +1,98 @@
+{
+  "id": "cube-medium-04",
+  "mode": "cube",
+  "difficulty": "medium",
+  "length_beats": 8,
+  "objects": [
+    {
+      "id": "1",
+      "x_beat": 0.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "2",
+      "x_beat": 1.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "2",
+      "x_beat": 2.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "2",
+      "x_beat": 3.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "3",
+      "x_beat": 4.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "5",
+      "x_beat": 5.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "2",
+      "x_beat": 6.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "3",
+      "x_beat": 7.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "9",
+      "x_beat": 2.0,
+      "y": 135,
+      "role": "gameplay"
+    },
+    {
+      "id": "9",
+      "x_beat": 4.0,
+      "y": 135,
+      "role": "gameplay"
+    },
+    {
+      "id": "8",
+      "x_beat": 6.0,
+      "y": 135,
+      "role": "gameplay"
+    },
+    {
+      "id": "1736",
+      "x_beat": 6.75,
+      "y": 315,
+      "role": "decoration"
+    },
+    {
+      "id": "1736",
+      "x_beat": 3.37,
+      "y": 285,
+      "role": "decoration"
+    }
+  ],
+  "entry": {
+    "x_beat": 0.0,
+    "y": 105,
+    "speed": 1.0
+  },
+  "exit": {
+    "x_beat": 8.0,
+    "y": 105,
+    "speed": 1.0
+  },
+  "tested": true,
+  "source": "synthetic"
+}
