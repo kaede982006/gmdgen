@@ -69,3 +69,10 @@ skills/
 
 # Release artifacts (built locally, not tracked)
 release_assets/
+
+# ML checkpoints, reports, and external reference PDFs are release/runtime
+# artifacts. Keep source docs in git; attach generated assets to releases.
+ckpts/
+reports/
+mypy_output.txt
+docs/AI/*.pdf

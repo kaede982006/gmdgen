@@ -111,6 +111,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Append/export a structured generation example JSONL for future fine-tuning.",
     )
+    generate_parser.add_argument(
+        "--use-ml",
+        action="store_true",
+        help="Use the trained GMD language model checkpoint instead of the symbolic pipeline.",
+    )
+    generate_parser.add_argument(
+        "--ml-ckpt",
+        default="ckpts/gmd_lm_tiny.pt",
+        help="Path to a GMDLanguageModel checkpoint (used with --use-ml).",
+    )
+    generate_parser.add_argument(
+        "--sections",
+        type=int,
+        default=4,
+        help="Number of sections to generate (used with --use-ml).",
+    )
+    generate_parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Sampling seed (used with --use-ml).",
+    )
 
     validate_parser = subparsers.add_parser(
         "validate",
@@ -156,6 +178,20 @@ def main() -> None:
         result = train_from_config(config)
 
     elif args.command == "generate":
+        if args.use_ml:
+            from gmdgen.ml.cli_runner import run_ml_generate
+            try:
+                result = run_ml_generate(
+                    ckpt_path=Path(args.ml_ckpt),
+                    output=args.output,
+                    prompt=args.prompt or "",
+                    sections=args.sections,
+                    seed=args.seed,
+                )
+            except Exception as exc:  # noqa: BLE001
+                parser.exit(1, f"error: {exc}\n")
+            print(json.dumps(result, indent=2))
+            return
         if not args.test_local_provider:
             parser.exit(
                 2,

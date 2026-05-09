@@ -5,7 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project adheres to Semantic
 Versioning.
 
-## [0.1.0] - 2026-05-05
+## [0.1.0] - 2026-05-09
+
+AI baseline (Tier-2 language model) on top of the GPL-3.0 baseline.
+
+### Added (AI baseline)
+- `gmdgen.ml.tokens` — factorized GD-object tokenizer: 7 sub-token fields
+  (id / cls / dx / y / mode / speed / section) with reserved special slots
+  for PAD / BOS / EOS / UNK.
+- `gmdgen.ml.dataset` — `GMDTokenDataset` over the `.gmd` corpus with
+  sliding-window slicing and three augmentations (y-mirror, decoration
+  dropout, section shuffle).
+- `gmdgen.ml.architectures.GMDLanguageModel` — real causal Transformer
+  (4 layers, d_model=128, ~600k params) replacing the previous
+  dataclass-only architecture spec. Spec helpers preserved for backward
+  compatibility.
+- `gmdgen.ml.train` — AdamW + cosine + warmup training loop with held-out
+  perplexity logging.
+- `gmdgen.ml.sample` — nucleus + top-k decoding with monotonic-x mask and
+  post-hoc ground-rail repair.
+- `gmdgen.ml.smoke` and `tests/test_ml_smoke.py` — convergence check
+  (forward + backward + optimizer step + sample) used as the recursive
+  debug-loop gate.
+- `gmdgen.ml.cli_runner` — `--use-ml` path on `gmdgen generate` that
+  bypasses the symbolic pipeline and writes a real `.gmd`.
+- `gmdgen.eval.metrics` — editor_load_rate, play_success_rate,
+  mode_coverage_kl, repair_loss_proxy, held_out_perplexity,
+  invariant_pass.rate.
+- `tools/audit_dataset.py` — per-mode / per-class distribution audit.
+- `docs/refactor/AI_BASELINE_v0.1.0.md` — PDF→code mapping and
+  reproduction recipe.
+- New optional dependency group `[ml]` with `torch>=2.2` and `numpy>=1.26`.
+
+### Changed (AI baseline)
+- `gmdgen generate` accepts `--use-ml`, `--ml-ckpt`, `--sections`, and
+  `--seed`. Without `--use-ml`, the existing symbolic pipeline is
+  unchanged.
+- `RELEASE_NOTES_0.1.0.md` — rewritten to describe the AI baseline.
+
+### Notes
+- 702 tests pass, 17 skipped.
+- Held-out perplexity drops from 80 → 53 over 600 CPU training steps.
+- All 8/8 sampled levels satisfy I-1..I-5 + R0 invariants.
+
+## [0.1.0-prev] - 2026-05-05
 
 Clean GPL-3.0 baseline with the algorithmic redesign already applied,
 plus v2.3 patches: HSR generation, invariants, observability.

@@ -29,6 +29,10 @@ dependencies = [
 dev = [
   "pytest>=8.0",
 ]
+ml = [
+  "torch>=2.2",
+  "numpy>=1.26",
+]
 
 [project.scripts]
 gmdgen = "gmdgen.gui.app:main"

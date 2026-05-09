@@ -24,10 +24,33 @@ Architecture references:
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install .
+python -m pip install .          # core (deterministic + Ollama planner)
+python -m pip install ".[ml]"    # adds the trained GMD language model (torch + numpy)
 ```
 
 Recommended Ollama model: `qwen2.5-coder:7b`.
+
+## Quickstart — AI baseline (`--use-ml`)
+
+```bash
+# 1) train the tiny GMD language model on dataset/  (~30s on CPU)
+python -m gmdgen.ml.train --in dataset --out ckpts/gmd_lm_tiny.pt \
+    --max-steps 600 --batch 8 --ctx 256
+
+# 2) sample a real .gmd from the trained checkpoint
+python -m gmdgen generate --use-ml \
+    --ml-ckpt ckpts/gmd_lm_tiny.pt \
+    --prompt "energetic neon ship at 140bpm" \
+    --seed 7 --sections 4 --output outputs/ml_demo.gmd
+
+# 3) measure quality
+python -m gmdgen.eval.metrics --ckpt ckpts/gmd_lm_tiny.pt \
+    --in dataset --samples 8 --out reports/eval.json
+```
+
+See ``docs/refactor/AI_BASELINE_v0.1.0.md`` for the architecture, training
+recipe, and PDF → code mapping. Generated checkpoints and evaluation reports
+are runtime/release artifacts, not tracked source files.
 
 ## Running with Ollama
 
