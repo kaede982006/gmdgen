@@ -8,7 +8,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from gmdgen.ml.architectures import GMDLanguageModel, ModelConfig
-from gmdgen.ml.sample import SamplingConfig, generate
+from gmdgen.ml.sample import SamplingConfig, generate, generate_with_diagnostics
 from gmdgen.ml.tokens import IdVocab, NUM_SPECIAL
 
 
@@ -68,6 +68,20 @@ def test_generate_returns_objects(tiny_model: GMDLanguageModel) -> None:
     # x must be non-decreasing (we enforce monotonic at sample time)
     xs = [o.x for o in objs]
     assert all(b >= a for a, b in zip(xs, xs[1:]))
+
+
+def test_generate_uses_prompt_mode_and_reports_diagnostics(tiny_model: GMDLanguageModel) -> None:
+    vocab = IdVocab(id_to_slot={"1": NUM_SPECIAL, "13": NUM_SPECIAL + 1})
+    objs, diagnostics = generate_with_diagnostics(
+        tiny_model,
+        vocab,
+        sections=1,
+        cfg=SamplingConfig(max_objects=8, seed=2, prompt="ship challenge", candidates=1),
+    )
+    assert any(o.object_id == "13" and o.role == "portal" for o in objs)
+    assert diagnostics["candidate_width"] == 1
+    assert diagnostics["final_object_count"] == len(objs)
+    assert "repair_added_ratio" in diagnostics
 
 
 def test_full_size_model_under_param_budget() -> None:

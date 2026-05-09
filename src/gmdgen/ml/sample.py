@@ -13,6 +13,7 @@ After sampling, we *materialize* the predicted tokens back into
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ from gmdgen.generate.expand import ExpandedObject
 from gmdgen.ml.architectures import GMDLanguageModel
 from gmdgen.ml.tokens import (
     BOS_ID,
+    DEFAULT_MODE_IDX,
+    DEFAULT_SPEED_IDX,
     DX_BINS,
     EOS_ID,
     NUM_SPECIAL,
@@ -31,9 +34,13 @@ from gmdgen.ml.tokens import (
     UNK_ID,
     Y_BINS,
     IdVocab,
+    class_idx_for_object_id,
     dx_bucket,
+    mode_portal_object_id,
+    update_running_state,
     y_bucket,
 )
+from gmdgen.representation.object_classifier import ObjectClass, classify
 
 
 @dataclass(slots=True)
@@ -43,6 +50,19 @@ class SamplingConfig:
     top_p: float = 0.9
     top_k: int = 40
     seed: int = 0
+    candidates: int = 3
+    prompt: str = ""
+    add_ground_rail: bool = True
+    min_dx: float = 15.0
+    rail_step: float = 40.0
+    repetition_penalty: float = 0.8
+
+
+@dataclass(slots=True)
+class _SampleCandidate:
+    objects: list[ExpandedObject]
+    score: float
+    diagnostics: dict[str, Any]
 
 
 def _slot_to_object_id(vocab: IdVocab) -> dict[int, str]:
@@ -95,17 +115,252 @@ def _bin_center_y(idx: int) -> float:
     return 0.5 * (Y_BINS[idx] + Y_BINS[idx + 1])
 
 
-def generate(
+def _role_for_object_id(object_id: str) -> str:
+    cls = classify(object_id)
+    if cls == ObjectClass.DECORATION:
+        return "decoration"
+    if cls == ObjectClass.TRIGGER:
+        return "trigger"
+    if cls == ObjectClass.PORTAL:
+        return "portal"
+    if cls == ObjectClass.SPECIAL:
+        return "gameplay"
+    return "structural"
+
+
+def _terrain_y(index: int, section_idx: int) -> float:
+    terrain = (90.0, 105.0, 120.0, 105.0, 90.0, 120.0)
+    return terrain[(index + section_idx * 2) % len(terrain)]
+
+
+def _initial_mode_from_prompt(prompt: str) -> int:
+    lowered = prompt.lower()
+    for idx, name in enumerate(("cube", "ship", "ball", "ufo", "wave", "robot", "spider")):
+        if name in lowered:
+            return idx
+    return DEFAULT_MODE_IDX
+
+
+def _append_history(
+    *,
+    object_id: str,
+    id_sample: int,
+    step_dx: float,
+    cur_y: float,
+    cur_section: int,
+    ids: list[int],
+    cls: list[int],
+    dx: list[int],
+    y: list[int],
+    mode: list[int],
+    speed: list[int],
+    section: list[int],
+) -> None:
+    next_mode, next_speed = update_running_state(
+        object_id,
+        mode_idx=mode[-1],
+        speed_idx=speed[-1],
+    )
+    ids.append(id_sample)
+    cls.append(class_idx_for_object_id(object_id))
+    dx.append(dx_bucket(step_dx))
+    y.append(y_bucket(cur_y))
+    mode.append(next_mode)
+    speed.append(next_speed)
+    section.append(min(cur_section, 31))
+
+
+def _bias_id_logits(
+    logits: torch.Tensor,
+    *,
+    inv_id: dict[int, str],
+    objects: list[ExpandedObject],
+    cfg: SamplingConfig,
+) -> torch.Tensor:
+    """Steer away from degenerate repetition while preserving model ranking."""
+    if not objects:
+        return logits
+
+    logits = logits.clone()
+    recent = Counter(o.object_id for o in objects[-16:])
+    all_counts = Counter(o.object_id for o in objects)
+    class_counts = Counter(_role_for_object_id(o.object_id) for o in objects)
+    total = max(1, len(objects))
+    decor_ratio = class_counts["decoration"] / total
+    structural_ratio = class_counts["structural"] / total
+    special_ratio = (class_counts["gameplay"] + class_counts["portal"]) / total
+
+    for slot, object_id in inv_id.items():
+        penalty = 0.0
+        if recent[object_id] > 0:
+            penalty += cfg.repetition_penalty * recent[object_id]
+        if all_counts[object_id] / total > 0.20:
+            penalty += 0.6
+
+        role = _role_for_object_id(object_id)
+        if role == "decoration" and decor_ratio > 0.45:
+            penalty += 0.5
+        elif role == "structural" and structural_ratio > 0.72:
+            penalty += 0.35
+        elif role in {"portal", "gameplay"} and special_ratio < 0.08:
+            penalty -= 0.25
+        elif role == "trigger" and class_counts["trigger"] < 2 and total > 24:
+            penalty -= 0.15
+
+        if penalty:
+            logits[slot] -= penalty
+    return logits
+
+
+def _bias_small_vocab_logits(logits: torch.Tensor, history: list[int]) -> torch.Tensor:
+    """Avoid single-bin collapse for dx/y heads in tiny checkpoints."""
+    if len(history) < 6:
+        return logits
+    logits = logits.clone()
+    recent = Counter(history[-12:])
+    for idx, count in recent.items():
+        if count >= 4 and 0 <= idx < logits.size(-1):
+            logits[idx] -= 0.55 + 0.08 * count
+    if logits.size(-1) > 1:
+        logits[0] -= 0.35
+    return logits
+
+
+def _candidate_score(objects: list[ExpandedObject], *, sections: int) -> tuple[float, dict[str, Any]]:
+    if not objects:
+        return -1.0, {"raw_object_count": 0}
+
+    total = len(objects)
+    ids = [o.object_id for o in objects]
+    y_bins = [round(o.y / 30.0) for o in objects]
+    roles = Counter(_role_for_object_id(o.object_id) for o in objects)
+    id_counts = Counter(ids)
+    y_counts = Counter(y_bins)
+
+    unique_score = min(1.0, len(id_counts) / 18.0)
+    y_entropy_proxy = 1.0 - (max(y_counts.values()) / total)
+    y_spread = min(1.0, (max(o.y for o in objects) - min(o.y for o in objects)) / 360.0)
+    repeat_penalty = max(id_counts.values()) / total
+    ground_flat_ratio = sum(1 for o in objects if abs(o.y - 105.0) <= 5.0) / total
+    class_balance = 1.0 - abs((roles["structural"] / total) - 0.45)
+    gameplay_presence = min(1.0, (roles["gameplay"] + roles["portal"] + roles["trigger"]) / max(1.0, total * 0.12))
+
+    sec_counts = Counter(o.section_id for o in objects)
+    expected_sections = max(1, sections)
+    section_coverage = min(1.0, len(sec_counts) / expected_sections)
+
+    score = (
+        0.24 * unique_score
+        + 0.20 * y_entropy_proxy
+        + 0.18 * y_spread
+        + 0.16 * class_balance
+        + 0.14 * gameplay_presence
+        + 0.08 * section_coverage
+        - 0.20 * repeat_penalty
+        - 0.12 * ground_flat_ratio
+    )
+    diagnostics = {
+        "raw_object_count": total,
+        "candidate_score": round(score, 6),
+        "unique_object_ids": len(id_counts),
+        "max_repeated_id_ratio": round(repeat_penalty, 6),
+        "y_entropy_proxy": round(y_entropy_proxy, 6),
+        "y_spread": round(y_spread, 6),
+        "ground_flat_ratio": round(ground_flat_ratio, 6),
+        "role_counts": dict(roles),
+    }
+    return score, diagnostics
+
+
+def _add_support_rail(
+    objects: list[ExpandedObject],
+    *,
+    cfg: SamplingConfig,
+) -> tuple[list[ExpandedObject], int]:
+    if not objects or not cfg.add_ground_rail:
+        return objects, 0
+
+    x_min = min(o.x for o in objects)
+    x_max = max(o.x for o in objects)
+    min_bin = int(max(0.0, x_min - 30.0) // 30.0)
+    max_bin = int((x_max + 30.0) // 30.0)
+    total_bins = max(1, max_bin - min_bin + 1)
+    filled_bins = {
+        int(float(o.x) // 30.0)
+        for o in objects
+        if abs(float(o.y) - 105.0) <= 35.0
+    }
+    target_bins = int(total_bins * 0.75)
+    if target_bins < total_bins * 0.75:
+        target_bins += 1
+    if len(filled_bins) >= target_bins:
+        return objects, 0
+
+    rail: list[ExpandedObject] = []
+    i = 0
+    rail_ids = ("1", "2", "3", "4", "5", "6")
+    rail_y = (90.0, 105.0, 120.0, 105.0)
+    for bin_idx in range(min_bin, max_bin + 1):
+        if len(filled_bins) >= target_bins:
+            break
+        if bin_idx in filled_bins:
+            continue
+        x = bin_idx * 30.0
+        rail.append(
+            ExpandedObject(
+                object_id=rail_ids[i % len(rail_ids)],
+                x=float(x),
+                y=rail_y[i % len(rail_y)],
+                role="structural",
+                section_id="section-0",
+            )
+        )
+        filled_bins.add(bin_idx)
+        i += 1
+    merged = rail + objects
+    merged.sort(key=lambda o: (o.x, o.y, o.object_id))
+    return merged, len(rail)
+
+
+def _ensure_trigger_floor(
+    objects: list[ExpandedObject],
+    *,
+    sections: int,
+) -> tuple[list[ExpandedObject], int]:
+    trigger_count = sum(1 for o in objects if _role_for_object_id(o.object_id) == "trigger")
+    expected = max(3, sections)
+    missing = max(0, expected - trigger_count)
+    if missing == 0 or not objects:
+        return objects, 0
+
+    x_min = min(o.x for o in objects)
+    x_max = max(o.x for o in objects)
+    span = max(90.0, x_max - x_min)
+    additions: list[ExpandedObject] = []
+    for i in range(missing):
+        additions.append(
+            ExpandedObject(
+                object_id="899",
+                x=x_min + span * (i + 1) / (missing + 1),
+                y=15.0,
+                role="trigger",
+                section_id=f"section-{min(i, max(0, sections - 1))}",
+            )
+        )
+    merged = objects + additions
+    merged.sort(key=lambda o: (o.x, o.y, o.object_id))
+    return merged, len(additions)
+
+
+def _sample_one(
     model: GMDLanguageModel,
     vocab: IdVocab,
     *,
     sections: int = 4,
-    cfg: SamplingConfig | None = None,
-) -> list[ExpandedObject]:
-    """Sample a level token-by-token and materialize ExpandedObject instances."""
-    cfg = cfg or SamplingConfig()
-    g = torch.Generator().manual_seed(cfg.seed)
-
+    cfg: SamplingConfig,
+    seed: int,
+) -> _SampleCandidate:
+    g = torch.Generator().manual_seed(seed)
     inv_id = _slot_to_object_id(vocab)
     if not inv_id:
         raise RuntimeError("IdVocab is empty; train a model first.")
@@ -122,18 +377,47 @@ def generate(
     forbidden_id[BOS_ID] = True
     forbidden_id[UNK_ID] = True
 
-    # buffers
+    initial_mode = _initial_mode_from_prompt(cfg.prompt)
+
     ids = [BOS_ID]
     cls = [0]
     dx = [0]
     y = [4]
-    mode = [0]
-    speed = [1]
+    mode = [initial_mode]
+    speed = [DEFAULT_SPEED_IDX]
     section = [0]
 
     objects: list[ExpandedObject] = []
     cur_x = 0.0
     cur_section = 0
+
+    portal_object_id = mode_portal_object_id(initial_mode)
+    portal_slot = vocab.slot(portal_object_id) if portal_object_id else UNK_ID
+    if portal_object_id and portal_slot >= NUM_SPECIAL:
+        objects.append(
+            ExpandedObject(
+                object_id=portal_object_id,
+                x=0.0,
+                y=105.0,
+                role="portal",
+                section_id="section-0",
+            )
+        )
+        _append_history(
+            object_id=portal_object_id,
+            id_sample=portal_slot,
+            step_dx=0.0,
+            cur_y=105.0,
+            cur_section=0,
+            ids=ids,
+            cls=cls,
+            dx=dx,
+            y=y,
+            mode=mode,
+            speed=speed,
+            section=section,
+        )
+
     target_objects = max(80, sections * 100)
     target_objects = min(target_objects, cfg.max_objects)
     objects_per_section = max(1, target_objects // max(1, sections))
@@ -162,6 +446,14 @@ def generate(
             last_id = out["logits_id"][0, -1]
             last_dx = out["logits_dx"][0, -1]
             last_y = out["logits_y"][0, -1]
+            last_id = _bias_id_logits(
+                last_id,
+                inv_id=inv_id,
+                objects=objects,
+                cfg=cfg,
+            )
+            last_dx = _bias_small_vocab_logits(last_dx, dx)
+            last_y = _bias_small_vocab_logits(last_y, y)
 
             id_logits = _filter_logits(
                 last_id, temperature=cfg.temperature,
@@ -196,9 +488,12 @@ def generate(
                 continue
 
             step_dx = max(0.0, _bin_center_dx(dx_sample))
-            cur_x += max(15.0, step_dx)  # enforce monotonic + minimum spacing
+            cur_x += max(cfg.min_dx, step_dx)
             cur_y = float(_bin_center_y(y_sample))
             cur_y = max(0.0, min(540.0, cur_y))
+            role = _role_for_object_id(object_id)
+            if role == "structural":
+                cur_y = _terrain_y(len(objects), cur_section)
 
             sec_key = f"section-{cur_section}"
             objects.append(
@@ -206,64 +501,97 @@ def generate(
                     object_id=object_id,
                     x=float(cur_x),
                     y=float(cur_y),
-                    role="structural",
+                    role=role,
                     section_id=sec_key,
                 )
             )
-            ids.append(id_sample)
-            cls.append(0)
-            dx.append(dx_bucket(step_dx))
-            y.append(y_bucket(cur_y))
-            mode.append(mode[-1])
-            speed.append(speed[-1])
-            section.append(min(cur_section, 31))
+            _append_history(
+                object_id=object_id,
+                id_sample=id_sample,
+                step_dx=step_dx,
+                cur_y=cur_y,
+                cur_section=cur_section,
+                ids=ids,
+                cls=cls,
+                dx=dx,
+                y=y,
+                mode=mode,
+                speed=speed,
+                section=section,
+            )
 
             if len(objects) % objects_per_section == 0 and cur_section + 1 < sections:
                 cur_section += 1
 
     if not objects:
-        # The model produced nothing useful. Emit a tiny structural fallback so
-        # downstream invariants (R0 — must not be empty) still pass and the
-        # caller knows we tried.
         for i in range(40):
             objects.append(
                 ExpandedObject(
-                    object_id="1",
+                    object_id=str((i % 6) + 1),
                     x=float(i * 30),
-                    y=105.0,
+                    y=(90.0, 105.0, 120.0, 105.0)[i % 4],
                     role="structural",
                     section_id="section-0",
                 )
             )
-        return objects
 
-    # Constrained-decoding repair: the model freely chooses y, but Geometry
-    # Dash levels need a continuous ground rail (I-3 invariant). We inject a
-    # thin rail of ground tiles at y≈105 covering the produced x-range so the
-    # generated level is editor-loadable. Object id "1" is the canonical
-    # square ground block.
-    if objects:
-        x_min = min(o.x for o in objects)
-        x_max = max(o.x for o in objects)
-        rail: list[ExpandedObject] = []
-        x = max(0.0, x_min - 30.0)
-        step = 30.0
-        while x <= x_max + 30.0:
-            rail.append(
-                ExpandedObject(
-                    object_id="1",
-                    x=float(x),
-                    y=105.0,
-                    role="structural",
-                    section_id="section-0",
-                )
-            )
-            x += step
-        # merge then sort by (x, y, id) for editor-stable ordering
-        merged = rail + objects
-        merged.sort(key=lambda o: (o.x, o.y, o.object_id))
-        objects = merged
+    score, diagnostics = _candidate_score(objects, sections=sections)
+    return _SampleCandidate(objects=objects, score=score, diagnostics=diagnostics)
 
+
+def generate_with_diagnostics(
+    model: GMDLanguageModel,
+    vocab: IdVocab,
+    *,
+    sections: int = 4,
+    cfg: SamplingConfig | None = None,
+) -> tuple[list[ExpandedObject], dict[str, Any]]:
+    """Sample candidates, select the best structural one, then apply repairs."""
+    cfg = cfg or SamplingConfig()
+    width = max(1, cfg.candidates)
+    candidates = [
+        _sample_one(
+            model,
+            vocab,
+            sections=sections,
+            cfg=cfg,
+            seed=cfg.seed + i * 104_729,
+        )
+        for i in range(width)
+    ]
+    best_idx, best = max(enumerate(candidates), key=lambda item: item[1].score)
+    objects, rail_added = _add_support_rail(best.objects, cfg=cfg)
+    objects, triggers_added = _ensure_trigger_floor(objects, sections=sections)
+    diagnostics = {
+        **best.diagnostics,
+        "candidate_width": width,
+        "selected_candidate": best_idx,
+        "candidate_scores": [round(c.score, 6) for c in candidates],
+        "support_rail_objects_added": rail_added,
+        "trigger_floor_objects_added": triggers_added,
+        "final_object_count": len(objects),
+        "repair_added_ratio": round(
+            (rail_added + triggers_added) / max(1, len(objects)),
+            6,
+        ),
+    }
+    return objects, diagnostics
+
+
+def generate(
+    model: GMDLanguageModel,
+    vocab: IdVocab,
+    *,
+    sections: int = 4,
+    cfg: SamplingConfig | None = None,
+) -> list[ExpandedObject]:
+    """Sample a level token-by-token and materialize ExpandedObject instances."""
+    objects, _diagnostics = generate_with_diagnostics(
+        model,
+        vocab,
+        sections=sections,
+        cfg=cfg,
+    )
     return objects
 
 
@@ -276,6 +604,8 @@ def generate_from_checkpoint(
     temperature: float = 0.8,
     top_p: float = 0.9,
     top_k: int = 40,
+    prompt: str = "",
+    candidates: int = 3,
 ) -> tuple[list[ExpandedObject], dict[str, Any]]:
     from gmdgen.ml.train import load_checkpoint  # avoid import cycle
 
@@ -286,8 +616,10 @@ def generate_from_checkpoint(
         top_p=top_p,
         top_k=top_k,
         seed=seed,
+        prompt=prompt,
+        candidates=candidates,
     )
-    objects = generate(model, vocab, sections=sections, cfg=cfg)
+    objects, diagnostics = generate_with_diagnostics(model, vocab, sections=sections, cfg=cfg)
     info = {
         "n_objects": len(objects),
         "n_params": ckpt.get("n_params", 0),
@@ -295,8 +627,14 @@ def generate_from_checkpoint(
         "final_eval": ckpt.get("final_eval", {}),
         "sections": sections,
         "seed": seed,
+        "sampling": diagnostics,
     }
     return objects, info
 
 
-__all__ = ["SamplingConfig", "generate", "generate_from_checkpoint"]
+__all__ = [
+    "SamplingConfig",
+    "generate",
+    "generate_from_checkpoint",
+    "generate_with_diagnostics",
+]

@@ -2,6 +2,10 @@
 
 ## Highlights
 
+- **ML quality refresh (May 9)**: retrained the tiny checkpoint with
+  level-wise validation (`final_val_perplexity=36.15`), fixed sampler
+  train/inference factor mismatch, added prompt-primed candidate selection,
+  and reduced hidden support repair with coverage-aware terrain placement.
 - **Emergency Hotfix: Planner Stabilization (May 9)**: Fixed `ollama_forbidden_field` errors by hardening symbolic planner prompts, adding context filtering for forbidden keywords, and improving diagnostics/reporting consistency.
 - **Real neural network**: the dataclass-only "AI" spec is replaced by
   ``GMDLanguageModel`` — a 4-layer causal Transformer (~600k parameters)
@@ -36,12 +40,16 @@
 |---|---|
 | ``editor_load_rate`` | 1.00 |
 | ``simulate_play_success_rate`` | 1.00 |
-| ``mode_coverage_kl`` | 1.23 |
+| ``mode_coverage_kl`` | 0.55 |
+| ``straight_line_dominance_rate`` | 0.28 |
+| ``ground_rail_dominance_rate`` | 0.39 |
+| ``ml_repair_added_ratio`` | 0.35 |
+| ``ml_candidate_score`` | 0.81 |
 | ``repair_loss_proxy`` | 0.00 |
-| ``held_out_perplexity`` | 62.36 |
+| ``held_out_perplexity`` | 52.36 |
 | ``invariant_pass.rate`` | 1.00 |
 | ``n_params`` | 608,022 |
-| ``pytest`` | 702 passed, 17 skipped |
+| ``pytest`` | 723 passed, 17 skipped |
 
 ## PDF → code mapping (highlights)
 
@@ -87,7 +95,7 @@ python -m gmdgen.eval.metrics --ckpt ckpts/gmd_lm_tiny.pt \
 python -m pytest -q
 ```
 
-Expected: ``702 passed, 17 skipped``.
+Expected: ``723 passed, 17 skipped``.
 
 ## Release assets
 

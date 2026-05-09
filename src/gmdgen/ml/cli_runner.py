@@ -9,6 +9,7 @@ gzip+base64 them into the k4 tag, and write the resulting plist via
 """
 from __future__ import annotations
 
+import hashlib
 import random
 from pathlib import Path
 from typing import Any
@@ -53,13 +54,15 @@ def run_ml_generate(
 
     # Mix the prompt into the seed deterministically so different prompts
     # produce different samples without changing the model.
-    prompt_hash = abs(hash((prompt, seed))) % (2**31 - 1)
+    prompt_digest = hashlib.sha256(f"{seed}\0{prompt}".encode("utf-8")).digest()
+    prompt_hash = int.from_bytes(prompt_digest[:8], "big") % (2**31 - 1)
     effective_seed = (seed * 1_000_003 + prompt_hash) % (2**31 - 1)
 
     objects, info = generate_from_checkpoint(
         ckpt_path,
         sections=sections,
         seed=effective_seed,
+        prompt=prompt,
     )
 
     save_string = _objects_to_save_string(objects)
@@ -105,6 +108,7 @@ def run_ml_generate(
         "seed": seed,
         "effective_seed": effective_seed,
         "sections": sections,
+        "sampling": info.get("sampling", {}),
     }
 
 

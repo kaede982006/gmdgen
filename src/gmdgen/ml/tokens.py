@@ -57,6 +57,8 @@ CLS_TO_INDEX = {c: i for i, c in enumerate(CLS_ORDER)}
 
 MODE_NAMES = ("cube", "ship", "ball", "ufo", "wave", "robot", "spider")
 SPEED_NAMES = ("0.5x", "1x", "2x", "3x", "4x")
+DEFAULT_MODE_IDX = 0  # cube
+DEFAULT_SPEED_IDX = 1  # 1x
 
 # ── object id vocabulary ─────────────────────────────────────────────────────
 # Top-K most common ids in the training data go into the slots
@@ -170,6 +172,33 @@ def y_bucket(y: float) -> int:
     return _bucket(y, Y_BINS)
 
 
+def class_idx_for_object_id(object_id: str) -> int:
+    """Return the semantic class factor used by the ML token stream."""
+    return CLS_TO_INDEX.get(classify(object_id), 0)
+
+
+def update_running_state(
+    object_id: str,
+    *,
+    mode_idx: int,
+    speed_idx: int,
+) -> tuple[int, int]:
+    """Advance mode/speed factors with the same state machine as encoding."""
+    if object_id in _MODE_PORTAL:
+        mode_idx = _MODE_PORTAL[object_id]
+    if object_id in _SPEED_PORTAL:
+        speed_idx = _SPEED_PORTAL[object_id]
+    return mode_idx, speed_idx
+
+
+def mode_portal_object_id(mode_idx: int) -> str | None:
+    """Return the canonical portal id that enters a mode, if known."""
+    for object_id, idx in _MODE_PORTAL.items():
+        if idx == mode_idx:
+            return object_id
+    return None
+
+
 # ── encode ───────────────────────────────────────────────────────────────────
 def encode_level_string(level_data: str, vocab: IdVocab) -> list[FactorizedToken]:
     """Convert one decoded level data string into a list of FactorizedToken."""
@@ -189,8 +218,8 @@ def encode_level_string(level_data: str, vocab: IdVocab) -> list[FactorizedToken
 
     tokens: list[FactorizedToken] = []
     previous_x: float | None = None
-    mode_idx = 0  # cube default
-    speed_idx = 1  # 1x default
+    mode_idx = DEFAULT_MODE_IDX
+    speed_idx = DEFAULT_SPEED_IDX
 
     for i, obj in enumerate(objects):
         oid = extract_object_id(obj)
@@ -201,14 +230,13 @@ def encode_level_string(level_data: str, vocab: IdVocab) -> list[FactorizedToken
         if x_val is None or y_val is None:
             continue
 
-        # update mode/speed running state if portal
-        if oid in _MODE_PORTAL:
-            mode_idx = _MODE_PORTAL[oid]
-        if oid in _SPEED_PORTAL:
-            speed_idx = _SPEED_PORTAL[oid]
+        mode_idx, speed_idx = update_running_state(
+            oid,
+            mode_idx=mode_idx,
+            speed_idx=speed_idx,
+        )
 
-        cls = classify(oid)
-        cls_idx = CLS_TO_INDEX.get(cls, 0)
+        cls_idx = class_idx_for_object_id(oid)
         dx = (x_val - previous_x) if previous_x is not None else 0.0
         tokens.append(
             FactorizedToken(
@@ -258,10 +286,15 @@ __all__ = [
     "SECTION_VOCAB",
     "ID_VOCAB_SIZE",
     "TOP_K_IDS",
+    "DEFAULT_MODE_IDX",
+    "DEFAULT_SPEED_IDX",
     "FactorizedToken",
     "IdVocab",
     "build_id_vocab",
+    "class_idx_for_object_id",
     "dx_bucket",
+    "mode_portal_object_id",
+    "update_running_state",
     "y_bucket",
     "encode_level_string",
     "tokens_to_id_array",

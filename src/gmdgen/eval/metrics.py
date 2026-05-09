@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import random
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -29,7 +30,7 @@ from gmdgen.ml.dataset import (
     collate,
     encode_records_to_streams,
 )
-from gmdgen.ml.sample import SamplingConfig, generate
+from gmdgen.ml.sample import SamplingConfig, generate_with_diagnostics
 from gmdgen.ml.tokens import (
     BOS_ID,
     EOS_ID,
@@ -38,6 +39,7 @@ from gmdgen.ml.tokens import (
     encode_level_string,
 )
 from gmdgen.ml.train import load_checkpoint
+from gmdgen.representation.object_classifier import ObjectClass, classify
 
 
 @dataclass(slots=True)
@@ -50,16 +52,29 @@ class EvalConfig:
     seed: int = 0
 
 
-def held_out_perplexity(model, vocab, dataset_dir: Path, *, ctx: int) -> float:
-    """Compute perplexity on a held-out 10% slice of the dataset."""
+def held_out_perplexity(
+    model,
+    vocab,
+    dataset_dir: Path,
+    *,
+    ctx: int,
+    seed: int = 0,
+    val_split: float = 0.1,
+) -> float:
+    """Compute perplexity on a level-wise held-out slice of the dataset."""
     streams, _ = encode_records_to_streams(dataset_dir, vocab=vocab)
     if not streams:
         return float("nan")
+    if len(streams) > 1:
+        indices = list(range(len(streams)))
+        random.Random(seed).shuffle(indices)
+        n_val = min(len(indices) - 1, max(1, int(len(indices) * val_split)))
+        val_indices = set(indices[:n_val])
+        streams = [s for i, s in enumerate(streams) if i in val_indices]
     cfg = DatasetConfig(ctx=ctx, stride=ctx, augment=False, seed=999)
     ds = GMDTokenDataset(streams, cfg)
     n = len(ds)
-    n_eval = max(1, n // 10)
-    indices = list(range(n))[-n_eval:]
+    indices = list(range(n))
     loss_sum = 0.0
     n_tokens = 0
     model.eval()
@@ -152,6 +167,94 @@ def mode_coverage_kl(
     return float(kl)
 
 
+def _mean(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def _role_name(object_id: str) -> str:
+    cls = classify(object_id)
+    if cls == ObjectClass.DECORATION:
+        return "decoration"
+    if cls == ObjectClass.TRIGGER:
+        return "trigger"
+    if cls == ObjectClass.PORTAL:
+        return "portal"
+    if cls == ObjectClass.SPECIAL:
+        return "gameplay"
+    if cls == ObjectClass.STRUCTURE:
+        return "structure"
+    return "unknown"
+
+
+def structural_quality_metrics(
+    samples: list[list[Any]],
+    diagnostics: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Extrinsic structure metrics that better match visible GMD quality."""
+    diagnostics = diagnostics or []
+    straight_line_rates: list[float] = []
+    ground_rail_rates: list[float] = []
+    diversity_scores: list[float] = []
+    section_density_spreads: list[float] = []
+    role_counts: Counter[str] = Counter()
+    total_objects = 0
+
+    for objs in samples:
+        if not objs:
+            continue
+        total = len(objs)
+        total_objects += total
+        ids = [str(o.object_id) for o in objs]
+        y_bins = Counter(int(round(float(o.y) / 15.0)) for o in objs)
+        straight_line_rates.append(max(y_bins.values()) / total)
+        ground_rail_rates.append(
+            sum(
+                1
+                for o in objs
+                if str(o.object_id) in {"1", "2", "3", "4", "5", "6"}
+                and abs(float(o.y) - 105.0) <= 35.0
+            )
+            / total
+        )
+        diversity_scores.append(min(1.0, len(set(ids)) / max(8.0, total ** 0.5)))
+
+        sec = Counter(str(getattr(o, "section_id", "") or "section-0") for o in objs)
+        if sec:
+            vals = list(sec.values())
+            mean = sum(vals) / len(vals)
+            spread = (max(vals) - min(vals)) / max(1.0, mean)
+            section_density_spreads.append(spread)
+
+        for object_id in ids:
+            role_counts[_role_name(object_id)] += 1
+
+    role_ratios = {
+        f"{role}_ratio": count / max(1, total_objects)
+        for role, count in sorted(role_counts.items())
+    }
+    repair_ratios = [
+        float(d.get("repair_added_ratio", 0.0) or 0.0)
+        for d in diagnostics
+        if isinstance(d, dict)
+    ]
+    candidate_scores = [
+        float(d.get("candidate_score", 0.0) or 0.0)
+        for d in diagnostics
+        if isinstance(d, dict)
+    ]
+    return {
+        "straight_line_dominance_rate": _mean(straight_line_rates),
+        "ground_rail_dominance_rate": _mean(ground_rail_rates),
+        "object_diversity_score": _mean(diversity_scores),
+        "section_density_spread": _mean(section_density_spreads),
+        "ml_repair_added_ratio": _mean(repair_ratios),
+        "ml_candidate_score": _mean(candidate_scores),
+        "role_distribution": role_ratios,
+    }
+
+
 def beat_sync_mae_ms(samples: list[list[Any]], _audio: Any = None) -> float | None:
     """Audio not available in the v0.1.0 baseline — return None."""
     return None
@@ -198,15 +301,21 @@ def _check_invariants(samples: list[list[Any]]) -> dict[str, Any]:
 def evaluate(cfg: EvalConfig) -> dict[str, Any]:
     model, vocab, ckpt = load_checkpoint(cfg.ckpt)
     samples: list[list[Any]] = []
+    diagnostics: list[dict[str, Any]] = []
     for i in range(cfg.n_samples):
-        objs = generate(
+        objs, diag = generate_with_diagnostics(
             model, vocab, sections=cfg.sections,
             cfg=SamplingConfig(seed=cfg.seed + i, max_objects=400),
         )
         samples.append(objs)
+        diagnostics.append(diag)
 
     ppl = held_out_perplexity(
-        model, vocab, cfg.dataset_dir, ctx=model.cfg.ctx,
+        model,
+        vocab,
+        cfg.dataset_dir,
+        ctx=model.cfg.ctx,
+        seed=int((ckpt.get("train_cfg") or {}).get("seed", 0) or 0),
     )
     inv = _check_invariants(samples)
     metrics: dict[str, Any] = {
@@ -218,11 +327,13 @@ def evaluate(cfg: EvalConfig) -> dict[str, Any]:
         "editor_load_rate": editor_load_rate(samples),
         "simulate_play_success_rate": simulate_play_success_rate(samples),
         "mode_coverage_kl": mode_coverage_kl(samples),
+        "structural_quality": structural_quality_metrics(samples, diagnostics),
         "beat_sync_mae_ms": beat_sync_mae_ms(samples),
         "repair_loss_proxy": repair_loss_proxy(samples),
         "held_out_perplexity": ppl,
         "invariant_pass": inv,
         "objects_per_sample": [len(s) for s in samples],
+        "sampling_diagnostics": diagnostics,
     }
     if cfg.out_path is not None:
         cfg.out_path.parent.mkdir(parents=True, exist_ok=True)

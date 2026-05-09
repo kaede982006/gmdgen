@@ -14,8 +14,8 @@ through a small causal Transformer trained on the project's `.gmd` corpus.
 | Sequence model | order-2 Markov counter | 4-layer causal Transformer (~600k params) |
 | Training signal | frequency counts | next-object cross-entropy + auxiliary `dx` / `y` heads |
 | Optimizer | n/a | AdamW(lr=3e-4, β=(0.9,0.95), wd=0.1) + cosine + 100-step warmup |
-| Decoding | pattern lookup | nucleus (top-p=0.9) + top-k(40) + temperature(0.8), monotonic-x mask, ground-rail repair |
-| Evaluation | none | held-out perplexity, editor-load rate, simulate-play success, mode-coverage KL, repair-loss proxy, invariant-pass rate |
+| Decoding | pattern lookup | prompt-primed candidate sampling, nucleus (top-p=0.9) + top-k(40) + temperature(0.8), monotonic-x mask, coverage-aware support repair |
+| Evaluation | none | level-wise perplexity, editor-load rate, simulate-play success, structure collapse metrics, repair ratio, invariant-pass rate |
 
 ## Theoretical mapping (PDF → code)
 
@@ -69,14 +69,18 @@ python -m gmdgen.eval.metrics \
 ```
 editor_load_rate            : 1.00
 simulate_play_success_rate  : 1.00
-mode_coverage_kl            : 1.23
+mode_coverage_kl            : 0.55
+straight_line_dominance     : 0.28
+ground_rail_dominance       : 0.39
+ml_repair_added_ratio       : 0.35
+ml_candidate_score          : 0.81
 repair_loss_proxy           : 0.00
-held_out_perplexity         : 62.36
+held_out_perplexity         : 52.36
 invariant_pass.rate         : 1.00
 n_params                    : 608,022
 completed_steps             : 600
-final_val_perplexity        : 53.19
-pytest                      : 702 passed, 17 skipped
+final_val_perplexity        : 36.15
+pytest                      : 723 passed, 17 skipped
 ```
 
 ## Known limitations / next steps

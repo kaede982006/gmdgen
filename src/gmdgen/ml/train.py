@@ -24,7 +24,7 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
 from gmdgen.ml.architectures import GMDLanguageModel, ModelConfig
 from gmdgen.ml.dataset import (
@@ -120,20 +120,34 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
         raise RuntimeError("No GMD streams produced from the dataset.")
 
     ds_cfg = DatasetConfig(ctx=cfg.ctx, stride=max(64, cfg.ctx // 2), seed=cfg.seed)
-    full_ds = GMDTokenDataset(streams, ds_cfg)
+    stream_indices = list(range(len(streams)))
+    random.Random(cfg.seed).shuffle(stream_indices)
+    if len(stream_indices) > 1:
+        n_val_streams = min(
+            len(stream_indices) - 1,
+            max(1, int(len(stream_indices) * cfg.val_split)),
+        )
+        val_indices = set(stream_indices[:n_val_streams])
+        train_streams = [s for i, s in enumerate(streams) if i not in val_indices]
+        val_streams = [s for i, s in enumerate(streams) if i in val_indices]
+    else:
+        train_streams = streams
+        val_streams = streams
 
-    n = len(full_ds)
-    n_val = max(1, int(n * cfg.val_split))
-    n_train = max(1, n - n_val)
-    g = torch.Generator().manual_seed(cfg.seed)
-    train_ds, val_ds = random_split(full_ds, [n_train, n_val], generator=g)
+    train_ds = GMDTokenDataset(train_streams, ds_cfg)
+    val_ds = GMDTokenDataset(
+        val_streams,
+        DatasetConfig(ctx=cfg.ctx, stride=cfg.ctx, augment=False, seed=cfg.seed),
+    )
+    n_train = len(train_ds)
+    n_val = len(val_ds)
 
     train_loader = DataLoader(
         train_ds,
         batch_size=cfg.batch_size,
         shuffle=True,
         collate_fn=collate,
-        drop_last=True,
+        drop_last=False,
     )
     val_loader = DataLoader(
         val_ds,
