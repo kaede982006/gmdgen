@@ -182,7 +182,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     generated_author = str(config.get("generated_author", "gmdgen"))
     style_reference_level = config.get("style_reference_level") or config.get("template_level")
     ai_provider_name = effective_ai_provider(config)
-    
+
     # Materialization Config
     mat_config = MaterializationConfig(
         object_multiplier=float(config.get("object_multiplier", 1.0)),
@@ -196,7 +196,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         fast_materialization=config.get("fast_materialization", True),
         seed=int(config.get("seed", 42)),
     )
-    
+
     max_gen_seconds = config.get("max_generation_seconds", 600)
 
     start_audio_time = time.time()
@@ -207,7 +207,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         backend=str(config.get("audio_backend", "auto")),
     )
     audio_analysis_seconds = time.time() - start_audio_time
-    
+
     confidence_report = features.confidence_report
     confidence_value = float(confidence_report.overall if confidence_report else features.confidence)
     if confidence_value < 0.35 and speed_portal_policy == "aggressive":
@@ -224,7 +224,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     learned_prompt_context = _load_learned_prompt_context(config)
     if learned_prompt_context:
         style_profile = _merge_learned_style_profile(style_profile, learned_prompt_context)
-    
+
     start_plan_time = time.time()
     speed_candidates = _plan_speed_portals(
         features.sections,
@@ -273,7 +273,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     motif_library.extend(_learned_motif_library(learned_prompt_context))
 
     allocator = GroupAllocator(max_group_id=max_group_id, policy=group_id_policy)
-    
+
     # Deterministic Baseline Materialization
     start_mat_time = time.time()
     object_plans = materialize_level_plans(
@@ -287,7 +287,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         start_speed=start_speed,
         song_offset=song_offset,
     )
-    
+
     # Add speed portals manually as they are critical
     object_plans.extend(
         _speed_portal_object_plans(speed_objects, editor_safe_mode=editor_safe_mode)
@@ -328,7 +328,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         song_offset_val=song_offset,
         start_speed_val=start_speed,
     )
-    ai_planning_seconds = time.time() - start_ai_time
+    ai_planning_seconds = time.time() - start_ai_time if int(ai_metadata.get("ai_calls_used", 0) or 0) > 0 else 0.0
 
     if ai_conversion.valid:
         if ai_conversion.object_plans:
@@ -374,7 +374,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         editor_safe_mode=editor_safe_mode,
     )
     repair_seconds = time.time() - start_repair_time
-    
+
     start_val_time = time.time()
     validation_report.playability_breakdown.update(playability_repair_report.to_dict())
     if playability_repair_report.converted_gameplay_to_decoration or playability_repair_report.simplified_dense_orb_chain:
@@ -444,7 +444,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         trigger_mode=trigger_mode,
     )
     validation_seconds = time.time() - start_val_time
-    
+
     if safe_mode or editor_safe_mode:
         level_objects, repair_report = repair_level_objects(
             level_objects,
@@ -564,7 +564,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         quality_metrics=validation_report.metrics,
     )
     scoring_seconds = time.time() - start_score_time
-    
+
     score_dict = score.to_dict()
     validation_report.final_object_count = len(level_objects)
     validation_report.score = float(score_dict["total"])
@@ -605,7 +605,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         ),
     ).to_dict()
     validation_report.quality_gate_passed = bool(validation_report.quality_gate_report.get("passed", False))
-    
+
     total_generation_seconds = time.time() - start_total_time
     validation_report.metrics.update({
         "audio_analysis_seconds": audio_analysis_seconds,
@@ -623,6 +623,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         and validation_report.valid
         and not validation_report.planner_fallback_used
         and not validation_report.low_quality_draft_saved
+        and bool(validation_report.ai_used)
     )
     validation_report.report_consistency = validate_generation_report_consistency(
         validation_report.to_dict(),
@@ -661,6 +662,13 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
             ).to_dict()
         if save_draft and report_path:
             _save_final_report(validation_report, report_path)
+        if bool(config.get("ollama_save_debug_artifacts", False) or config.get("save_debug_bundle", False)):
+            validation_report.ai_debug_artifact_path = _save_quality_debug_artifacts(
+                config=config,
+                output_dir=output_dir,
+                output_name=output_name,
+                validation_report=validation_report,
+            )
         failure_details = validation_report.to_dict()
         failure_details["output_path"] = draft_save_res.resolved_output_path or str(output_path)
         failure_details["save_result"] = draft_save_res.to_dict()
@@ -668,7 +676,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         failure_details["low_quality_draft_saved"] = validation_report.low_quality_draft_saved
         failure_details["final_success"] = False
         raise QualityGateFailure(failure_msg, details=failure_details)
-    
+
     if bool(config.get("ollama_save_debug_artifacts", False) or config.get("save_debug_bundle", False)):
         validation_report.ai_debug_artifact_path = _save_quality_debug_artifacts(
             config=config,
@@ -716,6 +724,17 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         "planner_status": validation_report.planner_status,
         "planner_fallback_used": validation_report.planner_fallback_used,
         "planner_fallback_reason": validation_report.planner_fallback_reason,
+        "planner_prompt_version": validation_report.planner_prompt_version,
+        "planner_prompt_source": validation_report.planner_prompt_source,
+        "planner_repair_attempted": validation_report.planner_repair_attempted,
+        "planner_repair_reason": validation_report.planner_repair_reason,
+        "raw_ollama_response_preview": validation_report.raw_ollama_response_preview,
+        "extracted_json_preview": validation_report.extracted_json_preview,
+        "forbidden_fields": validation_report.forbidden_fields,
+        "forbidden_field_paths": validation_report.forbidden_field_paths,
+        "schema_error_path": validation_report.schema_error_path,
+        "ollama_context_legacy_symbols_found": validation_report.ollama_context_legacy_symbols_found,
+        "ollama_context_legacy_symbol_paths": validation_report.ollama_context_legacy_symbol_paths,
         "candidate_ir_objects": validation_report.candidate_ir_objects,
         "serialized_objects": validation_report.serialized_objects,
         "final_objects": validation_report.final_objects,
@@ -806,10 +825,10 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     }
     if bool(config.get("debug_paths", False)):
         result["audio_file_full_path"] = str(audio_path)
-    
+
     if save_draft and report_path:
         _save_final_report(validation_report, report_path)
-        
+
     return _ensure_num_sections_for_report(result)
 
 
@@ -837,7 +856,7 @@ def _maybe_apply_ai_provider(
 ) -> tuple[AIPlanConversionResult, dict[str, Any]]:
     start_ai_loop_time = time.time()
     provider_name = effective_ai_provider(config)
-    
+
     # Consistently read flags
     use_ai_planner = bool(config.get("use_ai_planner", config.get("enable_ai_planning", False)))
     require_ai_planning = bool(config.get("require_ai_planning", config.get("fail_on_ai_planning_error", False)))
@@ -878,14 +897,26 @@ def _maybe_apply_ai_provider(
         "fatal_validation_issue_count": 0,
         "nonfatal_validation_warning_count": 0,
         "candidate_reports": [],
-        "selected_candidate_id": 0,
+        "selected_candidate_id": None,
         "plan_snapshots": [],
         "plan_diffs": [],
         "raw_ai_object_count": 0,
         "raw_ai_trigger_count": 0,
         "ai_output_preview": {"object_plans": [], "trigger_plans": []},
+        "planner_status": "not_used",
+        "planner_prompt_version": "",
+        "planner_prompt_source": "",
+        "planner_repair_attempted": False,
+        "planner_repair_reason": "",
+        "raw_ollama_response_preview": None,
+        "extracted_json_preview": None,
+        "forbidden_fields": [],
+        "forbidden_field_paths": [],
+        "schema_error_path": None,
+        "ollama_context_legacy_symbols_found": [],
+        "ollama_context_legacy_symbol_paths": [],
     }
-    
+
     if provider_name == "local_test_only":
         metadata["ai_model"] = "local-heuristic"
         metadata["ai_response_valid"] = True
@@ -907,7 +938,10 @@ def _maybe_apply_ai_provider(
     metadata["ai_planning_attempted"] = True
     context_chunks = _load_ai_context_chunks(config)
     metadata["ai_context_chunks_used"] = len(context_chunks)
-    
+    context_audit = _audit_ollama_context_for_legacy_symbols(context_chunks)
+    metadata["ollama_context_legacy_symbols_found"] = context_audit["symbols"]
+    metadata["ollama_context_legacy_symbol_paths"] = context_audit["paths"]
+
     from gmdgen.errors import ProviderError, GmdgenError
     try:
         provider = create_ai_provider_from_config(config)
@@ -926,11 +960,11 @@ def _maybe_apply_ai_provider(
     candidate_count = max(1, int(config.get("ai_candidate_count", 3)))
     if quality_mode in {"extreme", "extreme ml", "extreme_ml"}:
         candidate_count = max(candidate_count, 5)
-    
+
     best_conversion: AIPlanConversionResult | None = None
     best_report_score = -1.0
     candidate_reports: list[dict[str, Any]] = []
-    selected_candidate_id = 0
+    selected_candidate_id: int | None = None
     rounds_without_improvement = 0
     last_error_code = ""
 
@@ -953,10 +987,10 @@ def _maybe_apply_ai_provider(
             start_speed=start_speed,
             song_offset=song_offset,
         )
-        
+
         try:
-            response = provider.generate_level_plan(request)
             metadata["ai_calls_used"] += 1
+            response = provider.generate_level_plan(request)
         except Exception as exc:
             message = sanitize_ai_error(str(exc))
             last_error_code = getattr(exc, "code", "ollama_unknown_error")
@@ -964,12 +998,42 @@ def _maybe_apply_ai_provider(
             from gmdgen.ai.ollama_provider import OllamaProviderError
             if isinstance(exc, OllamaProviderError):
                 last_error_code = exc.code
-            
+            diagnostics = getattr(provider, "last_response_diagnostics", {})
+            if isinstance(diagnostics, dict):
+                for key in (
+                    "raw_ollama_response_preview",
+                    "extracted_json_preview",
+                    "forbidden_fields",
+                    "forbidden_field_paths",
+                    "schema_error_path",
+                ):
+                    if diagnostics.get(key):
+                        metadata[key] = diagnostics.get(key)
+
             candidate_reports.append({"candidate_id": candidate_id, "reject_reason": f"provider_error: {message}"})
-            
+
             if require_ai_planning:
                 raise ProviderError(message, code=last_error_code) from exc
             break
+
+        response_metadata = response.metadata if isinstance(getattr(response, "metadata", None), dict) else {}
+        planner_report = response_metadata.get("planner_report", {}) if isinstance(response_metadata, dict) else {}
+        if isinstance(response_metadata, dict):
+            metadata["planner_status"] = str(response_metadata.get("planner_status", metadata.get("planner_status", "")) or "")
+            metadata["planner_prompt_version"] = str(response_metadata.get("planner_prompt_version", ""))
+            metadata["planner_prompt_source"] = str(response_metadata.get("planner_prompt_source", ""))
+            metadata["planner_repair_attempted"] = bool(response_metadata.get("planner_repair_attempted", False))
+            metadata["planner_repair_reason"] = str(response_metadata.get("planner_repair_reason", ""))
+        if isinstance(planner_report, dict):
+            for key in (
+                "raw_ollama_response_preview",
+                "extracted_json_preview",
+                "forbidden_fields",
+                "forbidden_field_paths",
+                "schema_error_path",
+            ):
+                if planner_report.get(key) is not None:
+                    metadata[key] = planner_report.get(key)
 
         # Convert AI response
         conversion = convert_ai_response_to_plans(
@@ -983,7 +1047,7 @@ def _maybe_apply_ai_provider(
             conversion.object_plans.clear()
             conversion.trigger_plans.clear()
             conversion.errors.append("ollama_object_plan_output_rejected")
-        
+
         if conversion.valid:
             # Deterministic Expansion of AI-suggested plan.
             # Vary seed per candidate so deterministic materialization produces
@@ -1032,7 +1096,7 @@ def _maybe_apply_ai_provider(
                 "score": 0.0
             })
             rounds_without_improvement += 1
-            
+
         if rounds_without_improvement >= config.get("stop_if_no_improvement_rounds", 2):
             metadata["stopped_reason"] = "no_improvement"
             break
@@ -1043,35 +1107,46 @@ def _maybe_apply_ai_provider(
         metadata["ai_fallback_used"] = True
         metadata["ai_planning_error"] = last_error_code or "ai_output_invalid"
         metadata["ai_fallback_reason"] = metadata["ai_planning_error"]
-        
+
         fallback_response = AILevelPlanResponse(provider="local", model="deterministic", fallback_used=True)
         fallback_res = AIPlanConversionResult(response=fallback_response)
         fallback_res.warnings.append(f"Ollama AI plan was invalid JSON or failed: {last_error_code}")
-        
+
         return fallback_res, metadata
+
+    for report in candidate_reports:
+        if isinstance(report, dict):
+            report["selected"] = report.get("candidate_id") == selected_candidate_id
 
     metadata.update({
         "ai_used": True,
         "ai_planning_used": True,
         "ai_response_valid": True,
-        "selected_candidate_id": selected_candidate_id,
+        "selected_candidate_id": selected_candidate_id if candidate_reports else None,
         "candidate_reports": candidate_reports,
         "ai_output_object_count": len(best_conversion.object_plans),
         "ai_output_trigger_count": len(best_conversion.trigger_plans),
     })
-    
+
     return best_conversion, metadata
 
 
-    metadata.update({
-        "ai_used": True,
-        "selected_candidate_id": selected_candidate_id,
-        "candidate_reports": candidate_reports,
-        "ai_output_object_count": len(best_conversion.object_plans),
-        "ai_output_trigger_count": len(best_conversion.trigger_plans),
-    })
-    
-    return best_conversion, metadata
+def _audit_ollama_context_for_legacy_symbols(context_chunks: list[dict[str, Any]]) -> dict[str, list[str]]:
+    legacy_symbols = ("ObjectPlan", "TriggerPlan", "raw_gmd", "raw .gmd", "save_string")
+    found: list[str] = []
+    paths: list[str] = []
+    for chunk in context_chunks:
+        if not isinstance(chunk, dict):
+            continue
+        text = str(chunk.get("text", ""))
+        path = str(chunk.get("path", chunk.get("title", "context")))
+        for symbol in legacy_symbols:
+            if symbol in text:
+                if symbol not in found:
+                    found.append(symbol)
+                if path not in paths:
+                    paths.append(path)
+    return {"symbols": found, "paths": paths[:16]}
 
 
 def _provider_model_name(config: dict[str, Any], provider_name: str) -> str:
@@ -1396,8 +1471,11 @@ def _apply_ai_metadata(
         or str(ai_metadata.get("ai_planning_error", ""))
         or ("deterministic_fallback" if validation_report.planner_fallback_used else "")
     )
+    explicit_planner_status = str(ai_metadata.get("planner_status", "") or "")
     if validation_report.planner_fallback_used:
         validation_report.planner_status = "fallback"
+    elif explicit_planner_status == "success_repaired":
+        validation_report.planner_status = explicit_planner_status
     elif validation_report.ai_used and validation_report.ai_provider == "ollama":
         validation_report.planner_status = "ollama_used"
     elif validation_report.ai_provider == "local_test_only":
@@ -1406,6 +1484,21 @@ def _apply_ai_metadata(
         validation_report.planner_status = "local_deterministic"
     else:
         validation_report.planner_status = "not_used"
+    validation_report.planner_prompt_version = str(ai_metadata.get("planner_prompt_version", ""))
+    validation_report.planner_prompt_source = str(ai_metadata.get("planner_prompt_source", ""))
+    validation_report.planner_repair_attempted = bool(ai_metadata.get("planner_repair_attempted", False))
+    validation_report.planner_repair_reason = str(ai_metadata.get("planner_repair_reason", ""))
+    validation_report.raw_ollama_response_preview = ai_metadata.get("raw_ollama_response_preview")
+    validation_report.extracted_json_preview = ai_metadata.get("extracted_json_preview")
+    validation_report.forbidden_fields = [str(item) for item in ai_metadata.get("forbidden_fields", [])]
+    validation_report.forbidden_field_paths = [str(item) for item in ai_metadata.get("forbidden_field_paths", [])]
+    validation_report.schema_error_path = ai_metadata.get("schema_error_path")
+    validation_report.ollama_context_legacy_symbols_found = [
+        str(item) for item in ai_metadata.get("ollama_context_legacy_symbols_found", [])
+    ]
+    validation_report.ollama_context_legacy_symbol_paths = [
+        str(item) for item in ai_metadata.get("ollama_context_legacy_symbol_paths", [])
+    ]
     validation_report.ai_normalization_warnings = list(ai_metadata.get("ai_normalization_warnings", []))
     validation_report.pruned_trigger_property_count = int(ai_metadata.get("pruned_trigger_property_count", 0))
     validation_report.ignored_irrelevant_trigger_property_count = int(ai_metadata.get("ignored_irrelevant_trigger_property_count", 0))
@@ -1423,7 +1516,8 @@ def _apply_ai_metadata(
     validation_report.fatal_validation_issue_count = int(ai_metadata.get("fatal_validation_issue_count", 0))
     validation_report.nonfatal_validation_warning_count = int(ai_metadata.get("nonfatal_validation_warning_count", 0))
     validation_report.candidate_reports = list(ai_metadata.get("candidate_reports", []))
-    validation_report.selected_candidate_id = int(ai_metadata.get("selected_candidate_id", 0))
+    selected_candidate = ai_metadata.get("selected_candidate_id")
+    validation_report.selected_candidate_id = int(selected_candidate) if selected_candidate is not None else None
     validation_report.section_candidate_reports = list(ai_metadata.get("section_candidate_reports", []))
     validation_report.selected_section_count = int(ai_metadata.get("selected_section_count", 0))
     validation_report.global_consistency_report = dict(ai_metadata.get("global_consistency_report", {}))
@@ -1546,7 +1640,7 @@ def _finalize_quality_report(
         "density_spread": getattr(repair_report, "density_spread", 0),
         "budget_pruned": getattr(repair_report, "budget_pruned", 0),
     }
-    
+
     playability_breakdown = dict(validation_report.playability_breakdown)
     playability_breakdown.update({
         "trajectory_warning_count": validation_report.metrics.get("trajectory_warning_count", 0),
@@ -1572,7 +1666,15 @@ def _finalize_quality_report(
         validation_report.plan_count_report.selected_candidate_triggers = final_plan_snapshot.trigger_count
     validation_report.candidate_ir_objects = pre_repair_snapshot.object_count + pre_repair_snapshot.trigger_count
     validation_report.serialized_objects = final_plan_snapshot.object_count + final_plan_snapshot.trigger_count
-    validation_report.final_objects = len(level_objects)
+    if validation_report.planner_fallback_used:
+        validation_report.fallback_generated_objects = len(level_objects)
+        validation_report.final_objects = 0
+        validation_report.raw_ai_object_count = 0
+        validation_report.plan_count_report.raw_ai_objects = 0
+    else:
+        validation_report.final_objects = len(level_objects)
+        validation_report.fallback_generated_objects = 0
+
     validation_report.syntax_validation = {
         "passed": bool(validation_report.round_trip_valid),
         "round_trip_valid": bool(validation_report.round_trip_valid),
@@ -1629,6 +1731,19 @@ def _save_quality_debug_artifacts(
         "plan_snapshots": validation_report.plan_snapshots,
         "plan_diffs": validation_report.plan_diffs,
         "candidate_reports": validation_report.candidate_reports,
+        "selected_candidate_id": validation_report.selected_candidate_id,
+        "raw_ollama_response_preview": validation_report.raw_ollama_response_preview,
+        "extracted_json_preview": validation_report.extracted_json_preview,
+        "forbidden_fields": validation_report.forbidden_fields,
+        "forbidden_field_paths": validation_report.forbidden_field_paths,
+        "schema_error_path": validation_report.schema_error_path,
+        "planner_status": validation_report.planner_status,
+        "planner_prompt_version": validation_report.planner_prompt_version,
+        "planner_prompt_source": validation_report.planner_prompt_source,
+        "planner_repair_attempted": validation_report.planner_repair_attempted,
+        "planner_repair_reason": validation_report.planner_repair_reason,
+        "ollama_context_legacy_symbols_found": validation_report.ollama_context_legacy_symbols_found,
+        "ollama_context_legacy_symbol_paths": validation_report.ollama_context_legacy_symbol_paths,
         "quality_loss_reason_summary": validation_report.quality_loss_reason_summary,
         "repair_quality_report": validation_report.repair_quality_report,
         "validation_report": validation_report.to_dict(),
@@ -2361,15 +2476,15 @@ def _playability_warnings(
     ]
     gameplay.sort(key=lambda plan: plan.x)
     warnings: list[str] = []
-    
+
     # Sort section plans by x for efficient lookup
     sorted_sections = sorted(section_plans, key=lambda s: s.start_x)
     section_starts = [s.start_x for s in sorted_sections]
-    
+
     for prev, current in zip(gameplay, gameplay[1:]):
         section_idx = bisect.bisect_right(section_starts, current.x) - 1
         section = sorted_sections[max(0, section_idx)]
-        
+
         min_gap = _min_spacing_for_mode(section.gameplay_mode, section.speed_state, difficulty)
         if current.x - prev.x < min_gap:
             warnings.append(
@@ -2382,9 +2497,9 @@ def _playability_warnings(
         plan.x for plan in object_plans
         if plan.role == "speed_portal" or plan.object_id in {"12", "13", "47", "111", "660", "745", "1331", "200", "201", "202", "203", "1334"}
     ])
-    
+
     gameplay_xs = [p.x for p in gameplay]
-    
+
     for portal_x in portal_xs:
         idx = bisect.bisect_right(gameplay_xs, portal_x)
         if idx < len(gameplay_xs):
@@ -2432,10 +2547,10 @@ def _average_alignment_error(
     clean_events = [float(time) for time in event_times if time is not None]
     if not clean_events or not target_times:
         return 0.0
-        
+
     sorted_targets = sorted(target_times)
     errors = []
-    
+
     for event_time in clean_events:
         idx = bisect.bisect_left(sorted_targets, event_time)
         if idx == 0:
@@ -2446,9 +2561,9 @@ def _average_alignment_error(
             prev = sorted_targets[idx - 1]
             curr = sorted_targets[idx]
             nearest = prev if event_time - prev < curr - event_time else curr
-            
+
         errors.append(abs(event_time - nearest))
-        
+
     return sum(errors) / len(errors)
 
 

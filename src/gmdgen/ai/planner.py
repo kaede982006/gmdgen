@@ -44,12 +44,18 @@ class PlannerParseResult:
     fallback_reason: str = ""
     raw_payload: str | None = None
     json_payload: dict[str, Any] | None = None
+    forbidden_fields: list[str] = field(default_factory=list)
+    forbidden_field_paths: list[str] = field(default_factory=list)
+    schema_error_path: str | None = None
 
     @property
     def valid(self) -> bool:
         return self.plan is not None and not self.errors and not self.fallback_used
 
     def to_report_fields(self) -> dict[str, Any]:
+        extracted_preview = None
+        if self.json_payload is not None:
+            extracted_preview = json.dumps(self.json_payload, ensure_ascii=False, sort_keys=True)[:1000]
         return {
             "planner_status": "fallback" if self.fallback_used else ("valid" if self.plan else "invalid"),
             "planner_fallback_used": self.fallback_used,
@@ -57,6 +63,11 @@ class PlannerParseResult:
             "planner_errors": list(self.errors),
             "planner_raw_payload_preview": str(self.raw_payload)[:1000] if self.raw_payload else None,
             "planner_json_payload": self.json_payload if self.plan else None,
+            "raw_ollama_response_preview": str(self.raw_payload)[:1000] if self.raw_payload else None,
+            "extracted_json_preview": extracted_preview,
+            "forbidden_fields": list(self.forbidden_fields),
+            "forbidden_field_paths": list(self.forbidden_field_paths),
+            "schema_error_path": self.schema_error_path,
         }
 
 
@@ -71,22 +82,38 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
     
     if isinstance(payload, str):
         if _looks_like_raw_gmd(payload):
-            return PlannerParseResult(errors=["raw_gmd_output_rejected"], raw_payload=raw_payload)
+            return _result_with_diagnostics(
+                errors=["raw_gmd_output_rejected"],
+                raw_payload=raw_payload,
+                json_payload=None,
+            )
         try:
             data = json.loads(payload)
         except json.JSONDecodeError as exc:
-            return PlannerParseResult(errors=[f"json_parse_failed:{exc.msg}"], raw_payload=raw_payload)
+            return _result_with_diagnostics(
+                errors=[f"json_parse_failed:{exc.msg}"],
+                raw_payload=raw_payload,
+                json_payload=None,
+            )
     elif isinstance(payload, dict):
         data = payload
     else:
-        return PlannerParseResult(errors=["planner_output_must_be_json_object"], raw_payload=raw_payload)
+        return _result_with_diagnostics(
+            errors=["planner_output_must_be_json_object"],
+            raw_payload=raw_payload,
+            json_payload=None,
+        )
 
     errors = _reject_forbidden_shape(data)
     if errors:
-        return PlannerParseResult(errors=errors, raw_payload=raw_payload, json_payload=data)
+        return _result_with_diagnostics(errors=errors, raw_payload=raw_payload, json_payload=data)
 
     if not isinstance(data, dict):
-        return PlannerParseResult(errors=["planner_output_must_be_json_object"], raw_payload=raw_payload)
+        return _result_with_diagnostics(
+            errors=["planner_output_must_be_json_object"],
+            raw_payload=raw_payload,
+            json_payload=None,
+        )
 
     # Handle top-level aliases first so normalization can find them
     if "level_plan" not in data:
@@ -114,7 +141,7 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
             errors.append("level_plan_required")
         if not isinstance(sections_payload, list):
             errors.append("sections_required")
-        return PlannerParseResult(errors=errors, raw_payload=raw_payload, json_payload=data)
+        return _result_with_diagnostics(errors=errors, raw_payload=raw_payload, json_payload=data)
 
     # Now level_payload is dict and sections_payload is list
     level_errors = _validate_level_plan_payload(level_payload)
@@ -135,7 +162,7 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
         errors.append("sections_empty")
     
     if errors:
-        return PlannerParseResult(errors=errors, raw_payload=raw_payload, json_payload=data)
+        return _result_with_diagnostics(errors=errors, raw_payload=raw_payload, json_payload=data)
 
     return PlannerParseResult(
         plan=LevelPlan(
@@ -149,6 +176,7 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
         ),
         raw_payload=raw_payload,
         json_payload=data,
+        schema_error_path=None,
     )
 
 
@@ -174,8 +202,55 @@ def parse_or_fallback_planner_output(
         fallback_reason="invalid_ollama_planner_output",
         raw_payload=parsed.raw_payload,
         json_payload=parsed.json_payload,
+        forbidden_fields=list(parsed.forbidden_fields),
+        forbidden_field_paths=list(parsed.forbidden_field_paths),
+        schema_error_path=parsed.schema_error_path,
     )
     return res
+
+
+def _result_with_diagnostics(
+    *,
+    errors: list[str],
+    raw_payload: str | None,
+    json_payload: dict[str, Any] | None,
+) -> PlannerParseResult:
+    forbidden_paths = _forbidden_field_paths_from_errors(errors)
+    return PlannerParseResult(
+        errors=errors,
+        raw_payload=raw_payload,
+        json_payload=json_payload,
+        forbidden_fields=_field_names_from_paths(forbidden_paths),
+        forbidden_field_paths=forbidden_paths,
+        schema_error_path=_schema_error_path_from_errors(errors),
+    )
+
+
+def _forbidden_field_paths_from_errors(errors: list[str]) -> list[str]:
+    paths: list[str] = []
+    for error in errors:
+        if "forbidden_planner_field" not in error:
+            continue
+        path = error.split(":", 1)[0]
+        if path and path not in paths:
+            paths.append(path)
+    return paths
+
+
+def _field_names_from_paths(paths: list[str]) -> list[str]:
+    fields: list[str] = []
+    for path in paths:
+        field = re.split(r"\.|\[", path)[-1].rstrip("]")
+        if field and field not in fields:
+            fields.append(field)
+    return fields
+
+
+def _schema_error_path_from_errors(errors: list[str]) -> str | None:
+    for error in errors:
+        if ":" in error:
+            return error.split(":", 1)[0]
+    return "$" if errors else None
 
 
 def build_template_level_plan(

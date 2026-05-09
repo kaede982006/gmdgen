@@ -262,7 +262,7 @@ class ValidationReport:
     drop_impact_score: float = 0.0
     buildup_progression_score: float = 0.0
     candidate_reports: list[dict[str, Any]] = field(default_factory=list)
-    selected_candidate_id: int = 0
+    selected_candidate_id: int | None = None
     section_candidate_reports: list[dict[str, Any]] = field(default_factory=list)
     selected_section_count: int = 0
     global_consistency_report: dict[str, Any] = field(default_factory=dict)
@@ -272,9 +272,23 @@ class ValidationReport:
     planner_status: str = "not_used"
     planner_fallback_used: bool = False
     planner_fallback_reason: str = ""
+    planner_prompt_version: str = ""
+    planner_prompt_source: str = ""
+    planner_repair_attempted: bool = False
+    planner_repair_reason: str = ""
+    raw_ollama_response_preview: str | None = None
+    extracted_json_preview: str | None = None
+    forbidden_fields: list[str] = field(default_factory=list)
+    forbidden_field_paths: list[str] = field(default_factory=list)
+    schema_error_path: str | None = None
+    ollama_context_legacy_symbols_found: list[str] = field(default_factory=list)
+    ollama_context_legacy_symbol_paths: list[str] = field(default_factory=list)
     candidate_ir_objects: int = 0
     serialized_objects: int = 0
     final_objects: int = 0
+    fallback_generated_objects: int = 0
+    raw_ai_object_count: int = 0
+    raw_ai_trigger_count: int = 0
     syntax_validation: dict[str, Any] = field(default_factory=dict)
     semantic_validation: dict[str, Any] = field(default_factory=dict)
     playability_validation: dict[str, Any] = field(default_factory=dict)
@@ -391,9 +405,22 @@ class ValidationReport:
             "planner_status": self.planner_status,
             "planner_fallback_used": self.planner_fallback_used,
             "planner_fallback_reason": self.planner_fallback_reason,
+            "planner_prompt_version": self.planner_prompt_version,
+            "planner_prompt_source": self.planner_prompt_source,
+            "planner_repair_attempted": self.planner_repair_attempted,
+            "planner_repair_reason": self.planner_repair_reason,
+            "raw_ollama_response_preview": self.raw_ollama_response_preview,
+            "extracted_json_preview": self.extracted_json_preview,
+            "forbidden_fields": list(self.forbidden_fields),
+            "forbidden_field_paths": list(self.forbidden_field_paths),
+            "schema_error_path": self.schema_error_path,
+            "ollama_context_legacy_symbols_found": list(self.ollama_context_legacy_symbols_found),
+            "ollama_context_legacy_symbol_paths": list(self.ollama_context_legacy_symbol_paths),
             "candidate_ir_objects": self.candidate_ir_objects,
             "serialized_objects": self.serialized_objects,
             "final_objects": self.final_objects,
+            "fallback_generated_objects": self.fallback_generated_objects,
+            "raw_ai_object_count": self.raw_ai_object_count,
             "syntax_validation": dict(self.syntax_validation),
             "semantic_validation": dict(self.semantic_validation),
             "playability_validation": dict(self.playability_validation),

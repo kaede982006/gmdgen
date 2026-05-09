@@ -433,6 +433,9 @@ def safe_gui_callback(func: Any) -> Any:
 
 def summarize_generation_error(error_text: str) -> str:
     text = redact_text(error_text)
+    forbidden_fields = _extract_forbidden_fields_for_gui(text)
+    if forbidden_fields:
+        return f"Forbidden fields: {', '.join(forbidden_fields)}"
     if "code=" in text and "user_message=" in text:
         for line in text.splitlines():
             if line.startswith("user_message="):
@@ -452,6 +455,21 @@ def summarize_generation_error(error_text: str) -> str:
     if "invalid_json_schema" in text:
         return "Ollama schema error: structured output schema is invalid. See Logs / Audit for details."
     return text[:1200]
+
+
+def _extract_forbidden_fields_for_gui(text: str) -> list[str]:
+    fields: list[str] = []
+    explicit = re.search(r"Forbidden fields:\s*([^\n.]+)", text, flags=re.IGNORECASE)
+    if explicit:
+        for item in explicit.group(1).split(","):
+            field = item.strip()
+            if field and field not in fields:
+                fields.append(field)
+    for path in re.findall(r"\$[\w.\[\]]+:forbidden_planner_field", text):
+        field = re.split(r"\.|\[", path.split(":", 1)[0])[-1].rstrip("]")
+        if field and field not in fields:
+            fields.append(field)
+    return fields
 
 
 def validate_gui_generation_config(config: GuiGenerationConfig) -> list[str]:
@@ -1524,6 +1542,12 @@ def launch_gui() -> int:
                 fallback_reason = result.get("planner_fallback_reason") or result.get("ai_fallback_reason") or "planner_fallback"
                 validation = result.get("syntax_validation", result.get("validation_report", {}).get("syntax_validation", {}))
                 report_path = result.get("report_path", "")
+                forbidden_fields = result.get("forbidden_fields") or result.get("validation_report", {}).get("forbidden_fields", [])
+                forbidden_text = (
+                    f"Forbidden fields: {', '.join(str(item) for item in forbidden_fields)}\n"
+                    if forbidden_fields
+                    else ""
+                )
                 self._append_log(f"[generate:fallback] {fallback_reason}")
                 
                 passed_str = str(validation.get('passed', 'unknown')).lower() if isinstance(validation, dict) else 'unknown'
@@ -1534,6 +1558,7 @@ def launch_gui() -> int:
                         "- A deterministic fallback draft was saved only for inspection.\n"
                         "- This is not an AI-planned final success.\n\n"
                         f"Reason: {fallback_reason}\n"
+                        f"{forbidden_text}"
                         f"Serialized draft validation: {passed_str}\n"
                         f"Final success: false\n"
                         f"Report:\n{report_path}"

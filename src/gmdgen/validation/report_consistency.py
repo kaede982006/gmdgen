@@ -43,12 +43,20 @@ def validate_generation_report_consistency(
         errors.append("raw_objects_zero_but_candidate_or_final_objects_exist")
     if is_fallback and raw_objects == 0 and _positive(candidate_objects, final_objects):
         pass  # Fallback generates candidate/final objects deterministically, so raw_objects=0 is valid.
-        
+
     if candidate_objects is not None and parsed_candidate_objects is not None and candidate_objects != parsed_candidate_objects:
         errors.append("candidate_objects_do_not_match_parsed_candidate_objects")
-    if final_objects is not None and serialized_objects is not None and final_objects != serialized_objects:
-        errors.append("final_objects_do_not_match_serialized_objects")
-    if final_objects == 0:
+    
+    fallback_generated_objects = _maybe_int(report, "fallback_generated_objects")
+    
+    if is_fallback:
+        if fallback_generated_objects is not None and serialized_objects is not None and fallback_generated_objects != serialized_objects:
+            errors.append("fallback_generated_objects_do_not_match_serialized_objects")
+    else:
+        if final_objects is not None and serialized_objects is not None and final_objects != serialized_objects:
+            errors.append("final_objects_do_not_match_serialized_objects")
+    
+    if final_objects == 0 and not (is_fallback and fallback_generated_objects and fallback_generated_objects > 0):
         errors.append("final_objects_zero")
 
     if _metric(report, "missing_target_group", "unresolved_missing_target_group_count") > 0:
@@ -64,6 +72,26 @@ def validate_generation_report_consistency(
         errors.append("low_quality_draft_marked_final_success")
     if bool(report.get("planner_fallback_used")) and bool(report.get("final_success")):
         errors.append("planner_fallback_marked_final_success")
+    if not bool(report.get("ai_used")) and bool(report.get("final_success")) and not bool(report.get("local_fallback_used")):
+        errors.append("ai_not_used_but_marked_final_success")
+    if str(report.get("ai_fallback_reason", "")) == "ollama_forbidden_field":
+        if not report.get("forbidden_fields"):
+            errors.append("forbidden_fields_empty_despite_reason")
+    if isinstance(report.get("candidate_reports"), list) and len(report["candidate_reports"]) == 0:
+        if report.get("selected_candidate_id") is not None:
+            errors.append("selected_candidate_id_not_null_without_candidates")
+
+    # Timing consistency
+    metrics = report.get("metrics", {})
+    ai_calls_used = int(report.get("ai_calls_used", 0) or 0)
+    ai_planning_seconds = float(metrics.get("ai_planning_seconds", 0.0) or 0.0)
+    if ai_calls_used == 0 and ai_planning_seconds > 0.0:
+        errors.append("ai_planning_seconds_without_ai_calls")
+
+    # valid=true validation
+    if bool(report.get("valid")) and not bool(report.get("final_success")) and report.get("planner_status") != "fallback":
+         pass # Actually the requirement is valid=true SHOULD only mean serialized draft validation. We can check if it's distinct.
+
     if report.get("candidate_score_defined") is False or report.get("final_score_defined") is False:
         errors.append("candidate_or_final_score_definition_missing")
 
@@ -100,10 +128,30 @@ def contract_fields_from_generation_result(result: dict[str, Any]) -> dict[str, 
     if isinstance(plan_counts, dict):
         merged.setdefault("candidate_ir_objects", plan_counts.get("parsed_objects"))
         merged.setdefault("serialized_objects", plan_counts.get("final_encoded_objects"))
-    merged.setdefault("final_objects", merged.get("final_object_count", merged.get("num_objects", 0)))
+
+    is_fallback = bool(merged.get("planner_fallback_used"))
+    if is_fallback:
+        merged.setdefault("fallback_generated_objects", merged.get("final_object_count", merged.get("num_objects", 0)))
+        merged.setdefault("final_objects", 0)  # AI output was 0
+        merged.setdefault("raw_ai_object_count", 0)
+    else:
+        merged.setdefault("final_objects", merged.get("final_object_count", merged.get("num_objects", 0)))
+        merged.setdefault("fallback_generated_objects", 0)
+
     merged.setdefault("quality_gate_passed", bool(merged.get("quality_gate_report", {}).get("passed", merged.get("quality_gate_passed", False))))
     merged.setdefault("low_quality_draft_saved", False)
-    merged.setdefault("final_success", bool(merged.get("quality_gate_passed")) and not bool(merged.get("planner_fallback_used")))
+    
+    is_success = bool(merged.get("quality_gate_passed")) and not bool(merged.get("planner_fallback_used")) and bool(merged.get("ai_used", True))
+    merged.setdefault("final_success", is_success)
+    
+    if not is_success:
+        if bool(merged.get("planner_fallback_used")):
+            merged.setdefault("final_success_reason", "planner_fallback_used")
+        elif not bool(merged.get("quality_gate_passed")):
+            merged.setdefault("final_success_reason", "quality_gate_failed")
+        elif not bool(merged.get("ai_used", True)):
+            merged.setdefault("final_success_reason", "ai_not_used")
+
     return merged
 
 

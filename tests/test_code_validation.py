@@ -81,8 +81,10 @@ def test_code_validation_can_run_compileall_command_mocked(tmp_path: Path, monke
     assert any("-m" in command and "compileall" in command for command in seen)
 
 
+import sys
+
 def test_run_command_safely_success(tmp_path: Path) -> None:
-    result = run_command_safely(["python", "-c", "print('ok')"], cwd=tmp_path, timeout=30)
+    result = run_command_safely([sys.executable, "-c", "print('ok')"], cwd=tmp_path, timeout=30)
 
     assert result.passed is True
     assert "ok" in result.stdout_tail

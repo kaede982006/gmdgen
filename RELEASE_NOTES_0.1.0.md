@@ -2,6 +2,7 @@
 
 ## Highlights
 
+- **Emergency Hotfix: Planner Stabilization (May 9)**: Fixed `ollama_forbidden_field` errors by hardening symbolic planner prompts, adding context filtering for forbidden keywords, and improving diagnostics/reporting consistency.
 - **Real neural network**: the dataclass-only "AI" spec is replaced by
   ``GMDLanguageModel`` — a 4-layer causal Transformer (~600k parameters)
   that actually trains. forward / backward / optimizer step are exercised

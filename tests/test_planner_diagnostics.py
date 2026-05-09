@@ -89,3 +89,37 @@ def test_planner_diagnostics_in_report():
     assert report["planner_status"] == "invalid"
     assert "planner_raw_payload_preview" in report
     assert report["planner_raw_payload_preview"] is not None
+
+
+def test_planner_report_records_forbidden_field_diagnostics():
+    payload = {
+        "level_plan": {
+            "level_name": "Test",
+            "difficulty": "normal",
+            "target_duration": 30.0,
+            "object_budget": 1000,
+            "style": "modern",
+            "sync_intensity": "medium",
+        },
+        "sections": [
+            {
+                "section_id": "s001",
+                "time_start": 0.0,
+                "time_end": 10.0,
+                "game_mode": "cube",
+                "speed": "1x",
+                "density": 0.5,
+                "primary_pattern": "test",
+                "object_plans": [],
+                "score": 1.0,
+            }
+        ],
+    }
+
+    report = parse_ollama_section_plan(payload).to_report_fields()
+
+    assert report["forbidden_fields"] == ["object_plans", "score"]
+    assert "$.sections[0].object_plans" in report["forbidden_field_paths"]
+    assert report["schema_error_path"] == "$.sections[0].object_plans"
+    assert report["raw_ollama_response_preview"]
+    assert report["extracted_json_preview"]

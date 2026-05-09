@@ -69,6 +69,46 @@ def test_planner_fallback_cannot_be_normal_final_success() -> None:
     assert "planner_fallback_marked_final_success" in result.errors
 
 
+def test_ai_not_used_cannot_be_final_success() -> None:
+    report = _base_report()
+    report["ai_used"] = False
+    report["local_fallback_used"] = False
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "ai_not_used_but_marked_final_success" in result.errors
+
+
+def test_forbidden_fields_cannot_be_empty_if_reason_is_forbidden_field() -> None:
+    report = _base_report()
+    report["ai_fallback_reason"] = "ollama_forbidden_field"
+    report["forbidden_fields"] = []
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "forbidden_fields_empty_despite_reason" in result.errors
+
+
+def test_selected_candidate_id_must_be_null_if_no_candidates() -> None:
+    report = _base_report()
+    report["candidate_reports"] = []
+    report["selected_candidate_id"] = 0
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "selected_candidate_id_not_null_without_candidates" in result.errors
+
+
+def test_ai_planning_seconds_without_ai_calls_is_invalid() -> None:
+    report = _base_report()
+    report["ai_calls_used"] = 0
+    report["metrics"] = {"ai_planning_seconds": 15.0}
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "ai_planning_seconds_without_ai_calls" in result.errors
+
+
 def test_repair_requires_updated_metrics() -> None:
     report = _base_report()
     report["repair_applied"] = True

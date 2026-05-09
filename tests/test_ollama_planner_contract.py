@@ -10,7 +10,7 @@ from gmdgen.ai.ollama_provider import OllamaInvalidSchema, OllamaProvider
 from gmdgen.ai.planner import parse_ollama_section_plan, parse_or_fallback_planner_output
 from gmdgen.ai.schemas import AILevelPlanResponse
 from gmdgen.audio.analysis import AudioAnalysisResult
-from gmdgen.generate.audio_conditioned import _maybe_apply_ai_provider
+from gmdgen.generate.audio_conditioned import _audit_ollama_context_for_legacy_symbols, _maybe_apply_ai_provider
 
 
 def _valid_payload() -> dict:
@@ -104,6 +104,52 @@ def test_ollama_provider_rejects_legacy_object_plan_response() -> None:
 
     with pytest.raises(OllamaInvalidSchema):
         provider.generate_level_plan({"project_goal": "legacy output must be rejected"})
+
+
+def test_ollama_provider_repairs_forbidden_fields_once() -> None:
+    calls = {"count": 0}
+
+    def client(_payload: dict) -> dict:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {
+                "response": json.dumps(
+                    {
+                        "level_plan": {
+                            "level_name": "Bad",
+                            "difficulty": "normal",
+                            "target_duration": 30.0,
+                            "object_budget": 500,
+                            "style": "modern",
+                            "sync_intensity": "medium",
+                        },
+                        "sections": [
+                            {
+                                "section_id": "s001",
+                                "time_start": 0.0,
+                                "time_end": 8.0,
+                                "game_mode": "cube",
+                                "speed": "1x",
+                                "density": 0.35,
+                                "primary_pattern": "intro",
+                                "object_plans": [],
+                                "score": 1.0,
+                            }
+                        ],
+                    }
+                )
+            }
+        return {"response": json.dumps(_valid_payload())}
+
+    provider = OllamaProvider(model="unit-test", client=client, max_retries=0)
+
+    response = provider.generate_level_plan({"project_goal": "repair forbidden"})
+
+    assert calls["count"] == 2
+    assert response.metadata["planner_status"] == "success_repaired"
+    report = response.metadata["planner_report"]
+    assert report["forbidden_fields"] == ["object_plans", "score"]
+    assert report["forbidden_field_paths"]
 
 
 def test_production_ollama_path_falls_back_on_legacy_object_plans() -> None:
@@ -206,3 +252,16 @@ Good luck!
     extracted = extract_json_object(raw)
     assert "level_plan" in extracted
     assert extracted["level_plan"]["level_name"] == "Test Extraction"
+
+
+def test_ollama_context_audit_detects_legacy_symbols() -> None:
+    audit = _audit_ollama_context_for_legacy_symbols(
+        [
+            {"path": "docs/old.md", "text": "Legacy ObjectPlan and TriggerPlan example"},
+            {"path": "dataset/raw.txt", "text": "raw_gmd save_string example"},
+        ]
+    )
+
+    assert audit["symbols"] == ["ObjectPlan", "TriggerPlan", "raw_gmd", "save_string"]
+    assert "docs/old.md" in audit["paths"]
+    assert "dataset/raw.txt" in audit["paths"]

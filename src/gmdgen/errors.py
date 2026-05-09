@@ -252,6 +252,12 @@ def classify_exception(exc: BaseException) -> GenerationErrorInfo:
         code = "ai_plan_validation_error"
         user_message = "AI output validation failed after repair."
         remediation = "Review AI normalization warnings and prompt/schema constraints."
+    elif "forbidden_planner_field" in lower or "forbidden fields:" in lower:
+        code = "ollama_forbidden_field"
+        fields = _extract_forbidden_fields(text)
+        suffix = f": {', '.join(fields)}" if fields else ""
+        user_message = f"Forbidden fields{suffix}"
+        remediation = "Ollama returned a non-symbolic planner payload; check planner diagnostics and retry."
     elif "audio_file" in lower or "unsupported audio" in lower or "decode" in lower:
         code = "audio_input_error"
         user_message = "Audio input failed."
@@ -275,6 +281,21 @@ def classify_exception(exc: BaseException) -> GenerationErrorInfo:
         remediation=remediation,
         sanitized_traceback=redact_text("".join(traceback.format_exception(exc))),
     )
+
+
+def _extract_forbidden_fields(text: str) -> list[str]:
+    fields: list[str] = []
+    explicit = re.search(r"Forbidden fields:\s*([^\n.]+)", text, flags=re.IGNORECASE)
+    if explicit:
+        for item in explicit.group(1).split(","):
+            field = item.strip()
+            if field and field not in fields:
+                fields.append(field)
+    for path in re.findall(r"\$[\w.\[\]]+:forbidden_planner_field", text):
+        field = re.split(r"\.|\[", path.split(":", 1)[0])[-1].rstrip("]")
+        if field and field not in fields:
+            fields.append(field)
+    return fields
 
 
 def sanitize_exception(exc: BaseException) -> GenerationErrorInfo:

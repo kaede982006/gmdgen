@@ -236,9 +236,20 @@ def test_gui_report_contains_quality_fields(tmp_path: Path) -> None:
     assert "plan_snapshots" in report
     assert "plan_diffs" in report
     assert "candidate_reports" in report
+    assert report["selected_candidate_id"] is None
+    assert result["selected_candidate_id"] is None
+    assert result["timing"]["ai_planning_seconds"] == 0.0
     assert "quality_loss_reason_summary" in report
     assert "drop_impact_score" in report
     assert "density_target_error" in report
+    for key in (
+        "raw_ollama_response_preview",
+        "extracted_json_preview",
+        "forbidden_fields",
+        "forbidden_field_paths",
+        "schema_error_path",
+    ):
+        assert key in report
 
 
 def test_gui_status_distinguishes_fallback_from_success() -> None:

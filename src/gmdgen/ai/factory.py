@@ -101,6 +101,11 @@ def create_ai_provider_from_config(config: dict[str, Any] | None = None) -> Olla
         cache_enabled=bool(cfg.get("cache_ai_responses", True)),
         cache_dir=str(cfg.get("ai_response_cache_dir", "dataset/cache/ai_responses")),
         request_budget=budget,
+        debug_dir=(
+            str(cfg.get("ollama_debug_dir") or (str(cfg.get("output_dir", "outputs")).rstrip("/") + "/debug"))
+            if bool(cfg.get("ollama_save_debug_artifacts", False) or cfg.get("save_debug_bundle", False))
+            else None
+        ),
     )
 
 def create_provider_from_config(config: dict[str, Any] | None = None) -> OllamaProvider:

@@ -47,3 +47,15 @@ def test_api_key_redacted_from_all_error_outputs(monkeypatch) -> None:
     assert "sk-test-secret-123456" not in format_error_for_gui(info)
     assert "sk-test-secret-123456" not in format_error_for_log(info)
     assert "sk-test-secret-123456" not in redact_text("bad sk-test-secret-123456")
+
+
+def test_forbidden_planner_fields_are_user_visible() -> None:
+    info = classify_exception(
+        RuntimeError(
+            "Forbidden fields: object_plans, score. "
+            "$.sections[0].object_plans:forbidden_planner_field"
+        )
+    )
+
+    assert info.code == "ollama_forbidden_field"
+    assert "Forbidden fields: object_plans, score" in format_error_for_gui(info)
