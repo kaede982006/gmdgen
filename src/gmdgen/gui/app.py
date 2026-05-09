@@ -1525,13 +1525,17 @@ def launch_gui() -> int:
                 validation = result.get("syntax_validation", result.get("validation_report", {}).get("syntax_validation", {}))
                 report_path = result.get("report_path", "")
                 self._append_log(f"[generate:fallback] {fallback_reason}")
+                
+                passed_str = str(validation.get('passed', 'unknown')).lower() if isinstance(validation, dict) else 'unknown'
                 self.messagebox.showwarning(
-                    status_summary["title"],
+                    "Fallback Draft Saved — Planner Failed",
                     (
-                        f"{status_summary['summary']}\n\n"
+                        "- Ollama planner output did not match the required schema.\n"
+                        "- A deterministic fallback draft was saved only for inspection.\n"
+                        "- This is not an AI-planned final success.\n\n"
                         f"Reason: {fallback_reason}\n"
-                        f"Validation passed: {validation.get('passed', 'unknown') if isinstance(validation, dict) else 'unknown'}\n"
-                        f"Output:\n{result.get('output_path', '')}\n"
+                        f"Serialized draft validation: {passed_str}\n"
+                        f"Final success: false\n"
                         f"Report:\n{report_path}"
                     ),
                 )
@@ -1560,13 +1564,15 @@ def launch_gui() -> int:
                 self.status_var.set(status_summary["status"])
                 
             output_path = save_res.get("resolved_output_path", "") if save_res else result.get("output_path", "")
+            is_fallback = result.get('planner_fallback_used', False)
             score = result.get("final_score", result.get("score", {}).get("total", 0.0))
+            score_log = "fallback_draft" if is_fallback else score
             report_for_log = result.get("validation_report", {})
             if not isinstance(report_for_log, dict):
                 report_for_log = {}
             self._append_log(f"[generate] done: output={output_path}")
             self._append_log(f"[generate] saved: {output_path}")
-            self._append_log(f"[generate] score={score}")
+            self._append_log(f"[generate] score={score_log}")
             self._append_log(f"[generate] ai_provider={result.get('ai_provider')} valid={result.get('valid')}")
             self._append_log(
                 "[generate:status] "
@@ -1581,11 +1587,17 @@ def launch_gui() -> int:
                     "[ollama] removed unsupported params: "
                     + ", ".join(str(item) for item in removed_params)
                 )
+            candidates_count = len(result.get('candidate_reports', []))
+            selected_cand = result.get('selected_candidate_id', 0) if candidates_count > 0 else 'null'
+            is_fallback = result.get('planner_fallback_used', False)
+            raw_ai = result.get('validation_report', {}).get('raw_ai_object_count', 0)
+            raw_log = f"fallback_generated_objects={result.get('num_objects', 0)}" if is_fallback else f"raw_objects={raw_ai} candidate_ir_objects={raw_ai}"
+            
             self._append_log(
                 "[quality] "
-                f"selected_candidate={result.get('selected_candidate_id', 0)} "
-                f"candidates={len(result.get('candidate_reports', []))} "
-                f"raw_objects={result.get('validation_report', {}).get('raw_ai_object_count', 0)} "
+                f"selected_candidate={selected_cand} "
+                f"candidates={candidates_count} "
+                f"{raw_log} "
                 f"final_objects={result.get('num_objects', 0)} "
                 f"repair_loss={result.get('removed_object_ratio', 0.0)} "
                 f"drop_impact={result.get('drop_impact_score', 0.0)}"

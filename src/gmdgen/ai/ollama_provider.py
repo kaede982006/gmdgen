@@ -367,8 +367,20 @@ class OllamaProvider(LevelGenerationAIProvider):
             req_dict = request.to_dict()
         except AttributeError:
             req_dict = request
-            
-        prompt = json.dumps(req_dict, ensure_ascii=False)
+
+        system_instruction = (
+            "Return JSON only. Do not output markdown fences or explanations.\n"
+            "You are a strict symbolic Geometry Dash planner. Output EXACTLY this JSON schema:\n"
+            "{\n"
+            '  "level_plan": {"level_name": "string", "difficulty": "easy|normal|hard|insane|demon", "target_duration": float, "object_budget": int, "style": "string", "sync_intensity": "low|medium|high"},\n'
+            '  "sections": [\n'
+            '    {"section_id": "s001", "time_start": float, "time_end": float, "game_mode": "cube|ship|ball|ufo|wave|robot|spider", "speed": "0.5x|1x|2x|3x|4x", "density": float, "primary_pattern": "string", "allowed_object_families": ["string"], "forbidden_features": ["string"], "trigger_budget": int, "group_symbols": ["string"], "design_notes": "string"}\n'
+            "  ]\n"
+            "}\n"
+            "ABSOLUTELY FORBIDDEN: raw_gmd, object_plans, trigger_plans, group_id, color_channel_id, score, validation_passed. Include NOTHING else."
+        )
+        prompt = f"{system_instruction}\n\nUser Request: {json.dumps(req_dict, ensure_ascii=False)}"
+        
         raw_dict = self._post(prompt)
         planner_result = parse_ollama_section_plan(raw_dict)
         if not planner_result.valid:

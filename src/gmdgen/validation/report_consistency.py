@@ -37,8 +37,13 @@ def validate_generation_report_consistency(
     final_objects = _maybe_int(report, "final_objects", "final_object_count")
     serialized_objects = _maybe_int(report, "serialized_objects")
 
-    if _is_ollama_planner_report(report) and raw_objects == 0 and _positive(candidate_objects, final_objects):
+    is_fallback = bool(report.get("planner_fallback_used"))
+
+    if _is_ollama_planner_report(report) and not is_fallback and raw_objects == 0 and _positive(candidate_objects, final_objects):
         errors.append("raw_objects_zero_but_candidate_or_final_objects_exist")
+    if is_fallback and raw_objects == 0 and _positive(candidate_objects, final_objects):
+        pass  # Fallback generates candidate/final objects deterministically, so raw_objects=0 is valid.
+        
     if candidate_objects is not None and parsed_candidate_objects is not None and candidate_objects != parsed_candidate_objects:
         errors.append("candidate_objects_do_not_match_parsed_candidate_objects")
     if final_objects is not None and serialized_objects is not None and final_objects != serialized_objects:

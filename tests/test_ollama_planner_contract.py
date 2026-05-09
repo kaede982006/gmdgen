@@ -144,3 +144,65 @@ def test_production_ollama_path_falls_back_on_legacy_object_plans() -> None:
     assert conversion.response.fallback_used is True
     assert metadata["deterministic_fallback_used"] is True
     assert metadata["ai_planning_error"] == "ai_output_invalid"
+
+
+def test_planner_alias_normalization() -> None:
+    payload = {
+        "level_plan": {
+            "level_name": "Test Alias",
+            "difficulty": "normal gameplay",
+            "target_duration": 30.0,
+            "object_budget": 500,
+            "style": "modern_glow",
+            "sync_intensity": "medium",
+        },
+        "sections": [
+            {
+                "section_id": "s001",
+                "time_start": 0.0,
+                "time_end": 8.0,
+                "game_mode": "cube gameplay",
+                "speed": "2.0",
+                "target_density": 0.35,
+                "primary_pattern": "intro_platforming",
+                "allowed_objects": ["block", "spike"],
+                "forbidden_features": ["glow_spam"],
+                "trigger_budget": 3,
+                "group_symbols": ["group_1"],
+                "notes": "minimal decoration",
+            }
+        ],
+    }
+    
+    result = parse_ollama_section_plan(payload)
+    assert result.valid is True
+    assert result.plan is not None
+    assert result.plan.difficulty == "normal"
+    section = result.plan.sections[0]
+    assert section.game_mode == "cube"
+    assert section.speed == "2x"
+    assert section.density == 0.35
+    assert section.allowed_object_families == ["block", "spike"]
+    assert section.design_notes == "minimal decoration"
+
+def test_planner_json_extraction_with_fence() -> None:
+    from gmdgen.ai.ollama_provider import extract_json_object
+    raw = """
+Here is your plan:
+```json
+{
+  "level_plan": {"level_name": "Test Extraction", "difficulty": "normal", "target_duration": 198.0, "object_budget": 3000, "style": "classic", "sync_intensity": "low"},
+  "sections": [
+    {
+      "section_id": "s001", "time_start": 0.0, "time_end": 20.0, "game_mode": "cube", "speed": "1x", "density": 0.25,
+      "primary_pattern": "simple_cube", "allowed_object_families": ["block"], "forbidden_features": [],
+      "trigger_budget": 0, "group_symbols": [], "design_notes": "minimal"
+    }
+  ]
+}
+```
+Good luck!
+"""
+    extracted = extract_json_object(raw)
+    assert "level_plan" in extracted
+    assert extracted["level_plan"]["level_name"] == "Test Extraction"

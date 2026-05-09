@@ -76,9 +76,13 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
         return PlannerParseResult(errors=["planner_output_must_be_json_object"])
 
     errors = _reject_forbidden_shape(data)
-    if not isinstance(data, dict):
-        errors.append("planner_output_must_be_json_object")
+    if errors:
         return PlannerParseResult(errors=errors)
+
+    if not isinstance(data, dict):
+        return PlannerParseResult(errors=["planner_output_must_be_json_object"])
+
+    _normalize_dict_aliases(data)
 
     allowed_top = {"level_plan", "sections"}
     unknown_top = set(data) - allowed_top
@@ -330,3 +334,40 @@ def _looks_like_raw_gmd(text: str) -> bool:
         return True
     parts = stripped.split(",")
     return len(parts) >= 8 and parts[0].isdigit() and any(";" in item for item in parts)
+
+
+def _normalize_dict_aliases(data: dict[str, Any]) -> None:
+    if "level_plan" in data and isinstance(data["level_plan"], dict):
+        lp = data["level_plan"]
+        if "difficulty" in lp:
+            lp["difficulty"] = str(lp["difficulty"]).replace(" gameplay", "").replace(" mode", "").lower()
+            if "-" in lp["difficulty"]:
+                lp["difficulty"] = lp["difficulty"].split("-")[1]
+
+    if "sections" in data and isinstance(data["sections"], list):
+        for section in data["sections"]:
+            if not isinstance(section, dict):
+                continue
+            if "target_density" in section and "density" not in section:
+                section["density"] = section.pop("target_density")
+            if "allowed_objects" in section and "allowed_object_families" not in section:
+                section["allowed_object_families"] = section.pop("allowed_objects")
+            if "notes" in section and "design_notes" not in section:
+                section["design_notes"] = section.pop("notes")
+            
+            if "game_mode" in section:
+                section["game_mode"] = str(section["game_mode"]).replace(" gameplay", "").replace(" mode", "").lower()
+            if "speed" in section:
+                speed_str = str(section["speed"]).lower()
+                if speed_str in ["half", "0.5", "slow"]:
+                    section["speed"] = "0.5x"
+                elif speed_str in ["normal", "1", "1.0"]:
+                    section["speed"] = "1x"
+                elif speed_str in ["fast", "2", "2.0"]:
+                    section["speed"] = "2x"
+                elif speed_str in ["very fast", "3", "3.0"]:
+                    section["speed"] = "3x"
+                elif speed_str in ["super fast", "4", "4.0"]:
+                    section["speed"] = "4x"
+                elif not speed_str.endswith("x"):
+                    section["speed"] = f"{speed_str}x"
