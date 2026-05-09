@@ -72,11 +72,35 @@ def validate_generation_report_consistency(
         errors.append("low_quality_draft_marked_final_success")
     if bool(report.get("planner_fallback_used")) and bool(report.get("final_success")):
         errors.append("planner_fallback_marked_final_success")
+    if str(report.get("planner_status", "")) == "fallback" and bool(report.get("final_success")):
+        errors.append("planner_status_fallback_marked_final_success")
     if not bool(report.get("ai_used")) and bool(report.get("final_success")) and not bool(report.get("local_fallback_used")):
         errors.append("ai_not_used_but_marked_final_success")
+    if bool(report.get("final_success")) and str(report.get("ai_provider", "")) == "ollama":
+        if str(report.get("planner_status", "")) not in {"success", "success_normalized", "success_repaired"}:
+            errors.append("ollama_final_success_without_success_planner_status")
     if str(report.get("ai_fallback_reason", "")) == "ollama_forbidden_field":
         if not report.get("forbidden_fields"):
             errors.append("forbidden_fields_empty_despite_reason")
+    fallback_reason = str(report.get("planner_fallback_reason") or report.get("ai_fallback_reason") or "")
+    if fallback_reason == "ollama_missing_required_field":
+        missing_fields = report.get("missing_required_fields")
+        if not isinstance(missing_fields, list) or not missing_fields:
+            errors.append("missing_required_fields_empty_despite_missing_required_reason")
+        if report.get("raw_ollama_response_preview") is None:
+            errors.append("raw_ollama_response_preview_missing_for_schema_failure")
+        if report.get("extracted_json_preview") is None:
+            errors.append("extracted_json_preview_missing_for_schema_failure")
+    repairable_reasons = {
+        "ollama_missing_required_field",
+        "ollama_unexpected_response_shape",
+        "ollama_invalid_enum",
+    }
+    if fallback_reason in repairable_reasons and not report.get("forbidden_fields"):
+        repair_attempted = bool(report.get("planner_repair_attempted")) or bool(report.get("repair_prompt_sent"))
+        skipped_reason = str(report.get("planner_repair_skipped_reason", "") or "")
+        if not repair_attempted and not skipped_reason:
+            errors.append("repairable_planner_error_without_repair_attempt_or_skip_reason")
     if isinstance(report.get("candidate_reports"), list) and len(report["candidate_reports"]) == 0:
         if report.get("selected_candidate_id") is not None:
             errors.append("selected_candidate_id_not_null_without_candidates")
@@ -98,6 +122,8 @@ def validate_generation_report_consistency(
     for field_name in (
         "planner_status",
         "planner_fallback_used",
+        "planner_repair_attempted",
+        "planner_repair_skipped_reason",
         "candidate_ir_objects",
         "serialized_objects",
         "final_objects",
@@ -141,7 +167,16 @@ def contract_fields_from_generation_result(result: dict[str, Any]) -> dict[str, 
     merged.setdefault("quality_gate_passed", bool(merged.get("quality_gate_report", {}).get("passed", merged.get("quality_gate_passed", False))))
     merged.setdefault("low_quality_draft_saved", False)
     
-    is_success = bool(merged.get("quality_gate_passed")) and not bool(merged.get("planner_fallback_used")) and bool(merged.get("ai_used", True))
+    planner_status = str(merged.get("planner_status", ""))
+    planner_success = True
+    if str(merged.get("ai_provider", "")) == "ollama":
+        planner_success = planner_status in {"success", "success_normalized", "success_repaired"}
+    is_success = (
+        bool(merged.get("quality_gate_passed"))
+        and not bool(merged.get("planner_fallback_used"))
+        and bool(merged.get("ai_used", True))
+        and planner_success
+    )
     merged.setdefault("final_success", is_success)
     
     if not is_success:
@@ -151,6 +186,8 @@ def contract_fields_from_generation_result(result: dict[str, Any]) -> dict[str, 
             merged.setdefault("final_success_reason", "quality_gate_failed")
         elif not bool(merged.get("ai_used", True)):
             merged.setdefault("final_success_reason", "ai_not_used")
+        elif not planner_success:
+            merged.setdefault("final_success_reason", "planner_not_success")
 
     return merged
 
@@ -158,7 +195,7 @@ def contract_fields_from_generation_result(result: dict[str, Any]) -> dict[str, 
 def _is_ollama_planner_report(report: dict[str, Any]) -> bool:
     status = str(report.get("planner_status", ""))
     provider = str(report.get("ai_provider", ""))
-    return status in {"ollama_used", "valid"} or provider == "ollama"
+    return status in {"ollama_used", "success", "success_normalized", "success_repaired", "valid"} or provider == "ollama"
 
 
 def _positive(*values: int | None) -> bool:

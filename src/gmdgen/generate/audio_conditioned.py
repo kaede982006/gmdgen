@@ -728,11 +728,23 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         "planner_prompt_source": validation_report.planner_prompt_source,
         "planner_repair_attempted": validation_report.planner_repair_attempted,
         "planner_repair_reason": validation_report.planner_repair_reason,
+        "planner_repair_success": validation_report.planner_repair_success,
+        "planner_repair_skipped_reason": validation_report.planner_repair_skipped_reason,
         "raw_ollama_response_preview": validation_report.raw_ollama_response_preview,
         "extracted_json_preview": validation_report.extracted_json_preview,
         "forbidden_fields": validation_report.forbidden_fields,
         "forbidden_field_paths": validation_report.forbidden_field_paths,
         "schema_error_path": validation_report.schema_error_path,
+        "missing_required_fields": validation_report.missing_required_fields,
+        "empty_required_fields": validation_report.empty_required_fields,
+        "wrong_location_fields": validation_report.wrong_location_fields,
+        "schema_error_message": validation_report.schema_error_message,
+        "planner_failure_stage": validation_report.planner_failure_stage,
+        "planner_failure_reason_detail": validation_report.planner_failure_reason_detail,
+        "normalized_shape_repairs": validation_report.normalized_shape_repairs,
+        "repair_prompt_sent": validation_report.repair_prompt_sent,
+        "repair_response_preview": validation_report.repair_response_preview,
+        "repair_success": validation_report.repair_success,
         "ollama_context_legacy_symbols_found": validation_report.ollama_context_legacy_symbols_found,
         "ollama_context_legacy_symbol_paths": validation_report.ollama_context_legacy_symbol_paths,
         "candidate_ir_objects": validation_report.candidate_ir_objects,
@@ -908,11 +920,23 @@ def _maybe_apply_ai_provider(
         "planner_prompt_source": "",
         "planner_repair_attempted": False,
         "planner_repair_reason": "",
+        "planner_repair_success": None,
+        "planner_repair_skipped_reason": "",
         "raw_ollama_response_preview": None,
         "extracted_json_preview": None,
         "forbidden_fields": [],
         "forbidden_field_paths": [],
         "schema_error_path": None,
+        "missing_required_fields": [],
+        "empty_required_fields": [],
+        "wrong_location_fields": [],
+        "schema_error_message": None,
+        "planner_failure_stage": None,
+        "planner_failure_reason_detail": None,
+        "normalized_shape_repairs": [],
+        "repair_prompt_sent": False,
+        "repair_response_preview": None,
+        "repair_success": None,
         "ollama_context_legacy_symbols_found": [],
         "ollama_context_legacy_symbol_paths": [],
     }
@@ -1006,8 +1030,20 @@ def _maybe_apply_ai_provider(
                     "forbidden_fields",
                     "forbidden_field_paths",
                     "schema_error_path",
+                    "missing_required_fields",
+                    "empty_required_fields",
+                    "wrong_location_fields",
+                    "schema_error_message",
+                    "planner_failure_stage",
+                    "planner_failure_reason_detail",
+                    "normalized_shape_repairs",
+                    "repair_prompt_sent",
+                    "repair_response_preview",
+                    "repair_success",
+                    "planner_repair_success",
+                    "planner_repair_skipped_reason",
                 ):
-                    if diagnostics.get(key):
+                    if key in diagnostics and diagnostics.get(key) is not None:
                         metadata[key] = diagnostics.get(key)
 
             candidate_reports.append({"candidate_id": candidate_id, "reject_reason": f"provider_error: {message}"})
@@ -1024,6 +1060,8 @@ def _maybe_apply_ai_provider(
             metadata["planner_prompt_source"] = str(response_metadata.get("planner_prompt_source", ""))
             metadata["planner_repair_attempted"] = bool(response_metadata.get("planner_repair_attempted", False))
             metadata["planner_repair_reason"] = str(response_metadata.get("planner_repair_reason", ""))
+            metadata["planner_repair_success"] = response_metadata.get("planner_repair_success")
+            metadata["planner_repair_skipped_reason"] = str(response_metadata.get("planner_repair_skipped_reason", ""))
         if isinstance(planner_report, dict):
             for key in (
                 "raw_ollama_response_preview",
@@ -1031,6 +1069,18 @@ def _maybe_apply_ai_provider(
                 "forbidden_fields",
                 "forbidden_field_paths",
                 "schema_error_path",
+                "missing_required_fields",
+                "empty_required_fields",
+                "wrong_location_fields",
+                "schema_error_message",
+                "planner_failure_stage",
+                "planner_failure_reason_detail",
+                "normalized_shape_repairs",
+                "repair_prompt_sent",
+                "repair_response_preview",
+                "repair_success",
+                "planner_repair_success",
+                "planner_repair_skipped_reason",
             ):
                 if planner_report.get(key) is not None:
                     metadata[key] = planner_report.get(key)
@@ -1474,7 +1524,7 @@ def _apply_ai_metadata(
     explicit_planner_status = str(ai_metadata.get("planner_status", "") or "")
     if validation_report.planner_fallback_used:
         validation_report.planner_status = "fallback"
-    elif explicit_planner_status == "success_repaired":
+    elif explicit_planner_status in {"success", "success_normalized", "success_repaired"}:
         validation_report.planner_status = explicit_planner_status
     elif validation_report.ai_used and validation_report.ai_provider == "ollama":
         validation_report.planner_status = "ollama_used"
@@ -1486,13 +1536,44 @@ def _apply_ai_metadata(
         validation_report.planner_status = "not_used"
     validation_report.planner_prompt_version = str(ai_metadata.get("planner_prompt_version", ""))
     validation_report.planner_prompt_source = str(ai_metadata.get("planner_prompt_source", ""))
-    validation_report.planner_repair_attempted = bool(ai_metadata.get("planner_repair_attempted", False))
+    validation_report.planner_repair_attempted = bool(
+        ai_metadata.get("planner_repair_attempted", False)
+        or ai_metadata.get("repair_prompt_sent", False)
+    )
     validation_report.planner_repair_reason = str(ai_metadata.get("planner_repair_reason", ""))
+    validation_report.planner_repair_success = ai_metadata.get("planner_repair_success", ai_metadata.get("repair_success"))
+    validation_report.planner_repair_skipped_reason = str(ai_metadata.get("planner_repair_skipped_reason", ""))
     validation_report.raw_ollama_response_preview = ai_metadata.get("raw_ollama_response_preview")
     validation_report.extracted_json_preview = ai_metadata.get("extracted_json_preview")
     validation_report.forbidden_fields = [str(item) for item in ai_metadata.get("forbidden_fields", [])]
     validation_report.forbidden_field_paths = [str(item) for item in ai_metadata.get("forbidden_field_paths", [])]
     validation_report.schema_error_path = ai_metadata.get("schema_error_path")
+    validation_report.missing_required_fields = [str(item) for item in ai_metadata.get("missing_required_fields", [])]
+    validation_report.empty_required_fields = [str(item) for item in ai_metadata.get("empty_required_fields", [])]
+    validation_report.wrong_location_fields = [str(item) for item in ai_metadata.get("wrong_location_fields", [])]
+    validation_report.schema_error_message = (
+        str(ai_metadata.get("schema_error_message"))
+        if ai_metadata.get("schema_error_message") is not None
+        else None
+    )
+    validation_report.planner_failure_stage = (
+        str(ai_metadata.get("planner_failure_stage"))
+        if ai_metadata.get("planner_failure_stage") is not None
+        else None
+    )
+    validation_report.planner_failure_reason_detail = (
+        str(ai_metadata.get("planner_failure_reason_detail"))
+        if ai_metadata.get("planner_failure_reason_detail") is not None
+        else None
+    )
+    validation_report.normalized_shape_repairs = [str(item) for item in ai_metadata.get("normalized_shape_repairs", [])]
+    validation_report.repair_prompt_sent = bool(ai_metadata.get("repair_prompt_sent", False))
+    validation_report.repair_response_preview = (
+        str(ai_metadata.get("repair_response_preview"))
+        if ai_metadata.get("repair_response_preview") is not None
+        else None
+    )
+    validation_report.repair_success = ai_metadata.get("repair_success")
     validation_report.ollama_context_legacy_symbols_found = [
         str(item) for item in ai_metadata.get("ollama_context_legacy_symbols_found", [])
     ]
@@ -1737,11 +1818,23 @@ def _save_quality_debug_artifacts(
         "forbidden_fields": validation_report.forbidden_fields,
         "forbidden_field_paths": validation_report.forbidden_field_paths,
         "schema_error_path": validation_report.schema_error_path,
+        "missing_required_fields": validation_report.missing_required_fields,
+        "empty_required_fields": validation_report.empty_required_fields,
+        "wrong_location_fields": validation_report.wrong_location_fields,
+        "schema_error_message": validation_report.schema_error_message,
+        "planner_failure_stage": validation_report.planner_failure_stage,
+        "planner_failure_reason_detail": validation_report.planner_failure_reason_detail,
+        "normalized_shape_repairs": validation_report.normalized_shape_repairs,
         "planner_status": validation_report.planner_status,
         "planner_prompt_version": validation_report.planner_prompt_version,
         "planner_prompt_source": validation_report.planner_prompt_source,
         "planner_repair_attempted": validation_report.planner_repair_attempted,
         "planner_repair_reason": validation_report.planner_repair_reason,
+        "planner_repair_success": validation_report.planner_repair_success,
+        "planner_repair_skipped_reason": validation_report.planner_repair_skipped_reason,
+        "repair_prompt_sent": validation_report.repair_prompt_sent,
+        "repair_response_preview": validation_report.repair_response_preview,
+        "repair_success": validation_report.repair_success,
         "ollama_context_legacy_symbols_found": validation_report.ollama_context_legacy_symbols_found,
         "ollama_context_legacy_symbol_paths": validation_report.ollama_context_legacy_symbol_paths,
         "quality_loss_reason_summary": validation_report.quality_loss_reason_summary,

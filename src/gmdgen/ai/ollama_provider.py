@@ -88,7 +88,7 @@ class OllamaUnknownError(OllamaProviderError):
     code = "ollama_unknown_error"
 
 
-STRICT_SECTION_PLANNER_PROMPT_VERSION = "strict_section_plan_v2"
+STRICT_SECTION_PLANNER_PROMPT_VERSION = "strict_section_plan_v3"
 
 
 def _looks_like_raw_gmd(text: str) -> bool:
@@ -235,6 +235,18 @@ class OllamaProvider(LevelGenerationAIProvider):
             "forbidden_fields": [],
             "forbidden_field_paths": [],
             "schema_error_path": None,
+            "missing_required_fields": [],
+            "empty_required_fields": [],
+            "wrong_location_fields": [],
+            "schema_error_message": None,
+            "planner_failure_stage": None,
+            "planner_failure_reason_detail": None,
+            "normalized_shape_repairs": [],
+            "repair_prompt_sent": False,
+            "repair_response_preview": None,
+            "repair_success": None,
+            "planner_repair_success": None,
+            "planner_repair_skipped_reason": "",
         }
 
     @staticmethod
@@ -287,6 +299,18 @@ class OllamaProvider(LevelGenerationAIProvider):
             "forbidden_fields": list(report.get("forbidden_fields", [])),
             "forbidden_field_paths": list(report.get("forbidden_field_paths", [])),
             "schema_error_path": report.get("schema_error_path"),
+            "missing_required_fields": list(report.get("missing_required_fields", [])),
+            "empty_required_fields": list(report.get("empty_required_fields", [])),
+            "wrong_location_fields": list(report.get("wrong_location_fields", [])),
+            "schema_error_message": report.get("schema_error_message"),
+            "planner_failure_stage": report.get("planner_failure_stage"),
+            "planner_failure_reason_detail": report.get("planner_failure_reason_detail"),
+            "normalized_shape_repairs": list(report.get("normalized_shape_repairs", [])),
+            "repair_prompt_sent": bool(report.get("repair_prompt_sent", False)),
+            "repair_response_preview": report.get("repair_response_preview"),
+            "repair_success": report.get("repair_success"),
+            "planner_repair_success": report.get("planner_repair_success"),
+            "planner_repair_skipped_reason": str(report.get("planner_repair_skipped_reason", "")),
         }
 
     def _post(self, prompt: str, retry_repair: bool = True) -> dict[str, Any]:
@@ -458,14 +482,43 @@ class OllamaProvider(LevelGenerationAIProvider):
         system_instruction = (
             "You are a strict symbolic Geometry Dash level planner.\n"
             "Return JSON only.\n"
+            "The top-level JSON object must contain exactly these two required keys:\n"
+            '1. "level_plan"\n'
+            '2. "sections"\n'
+            'Do not put "sections" inside "level_plan".\n'
+            'The field "sections" must be a non-empty top-level array.\n'
+            "For a 198-second song, create at least 8 sections covering 0.0 to 198.0 seconds.\n\n"
+            "Valid top-level shape:\n"
+            "{\n"
+            '  "level_plan": {...},\n'
+            '  "sections": [...]\n'
+            "}\n\n"
+            "Invalid shape:\n"
+            "{\n"
+            '  "level_plan": {\n'
+            '    "sections": []\n'
+            "  }\n"
+            "}\n\n"
+            "Also invalid:\n"
+            "{\n"
+            '  "level_plan": {...}\n'
+            "}\n\n"
+            "Also invalid:\n"
+            "{\n"
+            '  "sections": []\n'
+            "}\n\n"
             "Do not output markdown fences.\n"
-            "Do not output explanations.\n"
-            "Do not create objects.\n"
-            "Do not create triggers.\n"
-            "Do not create raw GMD.\n"
+            "Do not output explanation text.\n"
+            "Do not output raw GMD.\n"
+            "Do not output object lists.\n"
+            "Do not output trigger lists.\n"
             "Do not output scores.\n"
             "Do not output validation results.\n"
-            "Output only:\n"
+            "Do not output raw .gmd save strings.\n"
+            "Do not output group IDs or color channel IDs.\n"
+            "Forbidden keys anywhere:\n"
+            "raw_gmd, gmd, object_plans, objects, trigger_plans, triggers, group_id, color_channel_id, score, validation_passed, final_success, quality_gate\n\n"
+            "Output schema:\n"
             "{\n"
             '  "level_plan": {\n'
             '    "level_name": "string",\n'
@@ -476,7 +529,7 @@ class OllamaProvider(LevelGenerationAIProvider):
             '    "sync_intensity": "low|medium|high"\n'
             '  },\n'
             '  "sections": [\n'
-            '    {\n'
+            "    {\n"
             '      "section_id": "string",\n'
             '      "time_start": float,\n'
             '      "time_end": float,\n'
@@ -489,12 +542,9 @@ class OllamaProvider(LevelGenerationAIProvider):
             '      "trigger_budget": int,\n'
             '      "group_symbols": ["string"],\n'
             '      "design_notes": "string"\n'
-            '    }\n'
-            '  ]\n'
+            "    }\n"
+            "  ]\n"
             "}\n"
-            "Forbidden keys anywhere in the JSON:\n"
-            "raw_gmd, gmd, object_plans, objects, trigger_plans, triggers, group_id, color_channel_id, score, validation_passed, final_success, quality_gate\n\n"
-            "If any forbidden key appears, the planner result will be rejected.\n"
             f"PROMPT_VERSION: {STRICT_SECTION_PLANNER_PROMPT_VERSION}"
         )
         prompt = f"{system_instruction}\n\nUser Request: {json.dumps(req_dict, ensure_ascii=False)}"
@@ -533,13 +583,37 @@ class OllamaProvider(LevelGenerationAIProvider):
                             planner_report=repaired_report,
                         )
                     return repaired
+            elif self._is_repairable_schema_error(planner_result):
+                repaired = self._repair_schema_planner_payload(
+                    original_payload=raw_dict,
+                    request_payload=req_dict,
+                    system_instruction=system_instruction,
+                    initial_result=planner_result,
+                )
+                if repaired is not None:
+                    repaired_report = repaired.metadata.get("planner_report", {})
+                    if isinstance(repaired_report, dict):
+                        self._record_response_diagnostics(
+                            raw_response=repaired_report.get("raw_ollama_response_preview"),
+                            extracted=repaired_report.get("extracted_json_preview"),
+                            planner_report=repaired_report,
+                        )
+                    return repaired
+            else:
+                report = planner_result.to_report_fields()
+                report["planner_repair_skipped_reason"] = "non_repairable_schema_error"
+                self._record_response_diagnostics(
+                    raw_response=json.dumps(raw_dict, ensure_ascii=False),
+                    extracted=raw_dict,
+                    planner_report=report,
+                )
             
             # Map errors to granular classes for better reporting
             err_str = "; ".join(planner_result.errors)
             if any("forbidden" in e for e in planner_result.errors):
                 fields = ", ".join(planner_result.forbidden_fields)
                 raise OllamaForbiddenField(f"Forbidden fields: {fields}. {err_str}")
-            if any("missing" in e or "required" in e for e in planner_result.errors):
+            if any("missing" in e or "required" in e or "sections_empty" in e for e in planner_result.errors):
                 raise OllamaMissingRequiredField(err_str)
             if any("unknown_game_mode" in e or "unknown_speed" in e or "unknown_difficulty" in e or "unknown_sync_intensity" in e for e in planner_result.errors):
                 raise OllamaInvalidEnum(err_str)
@@ -550,6 +624,7 @@ class OllamaProvider(LevelGenerationAIProvider):
                 
             raise OllamaInvalidSchema(err_str)
         
+        success_report = planner_result.to_report_fields()
         return AILevelPlanResponse(
             sections=[],
             gameplay_events=[],
@@ -561,10 +636,14 @@ class OllamaProvider(LevelGenerationAIProvider):
             expected_sync_notes=raw_dict.get("expected_sync_notes", []),
             metadata={
                 "planner_schema": "strict_section_plan_v1",
-                "planner_status": "success",
+                "planner_status": success_report.get("planner_status", "success"),
                 "planner_prompt_version": STRICT_SECTION_PLANNER_PROMPT_VERSION,
                 "planner_prompt_source": "gmdgen.ai.ollama_provider.OllamaProvider.generate_level_plan",
-                "planner_report": planner_result.to_report_fields(),
+                "planner_repair_attempted": False,
+                "planner_repair_reason": "",
+                "planner_repair_success": None,
+                "planner_repair_skipped_reason": "",
+                "planner_report": success_report,
                 "level_plan": raw_dict.get("level_plan", {}),
                 "sections": raw_dict.get("sections", []),
             },
@@ -604,6 +683,7 @@ class OllamaProvider(LevelGenerationAIProvider):
             return None
         report = repaired_result.to_report_fields()
         report["planner_status"] = "success_repaired"
+        report["planner_repair_success"] = True
         report["forbidden_fields"] = list(forbidden_fields)
         report["forbidden_field_paths"] = list(forbidden_field_paths)
         return AILevelPlanResponse(
@@ -622,6 +702,125 @@ class OllamaProvider(LevelGenerationAIProvider):
                 "planner_prompt_source": "gmdgen.ai.ollama_provider.OllamaProvider.generate_level_plan",
                 "planner_repair_attempted": True,
                 "planner_repair_reason": "forbidden_planner_field",
+                "planner_repair_success": True,
+                "planner_repair_skipped_reason": "",
+                "planner_report": report,
+                "level_plan": repaired_dict.get("level_plan", {}),
+                "sections": repaired_dict.get("sections", []),
+            },
+            provider="ollama",
+            model=self.model,
+        )
+
+    def _is_repairable_schema_error(self, planner_result: Any) -> bool:
+        if planner_result.forbidden_fields:
+            return False
+        if not planner_result.errors:
+            return False
+        repairable_tokens = (
+            "required",
+            "missing",
+            "sections_empty",
+            "must_be",
+            "unknown_game_mode",
+            "unknown_speed",
+            "unknown_difficulty",
+            "unknown_sync_intensity",
+            "unknown_top_level_keys",
+            "level_plan_missing",
+        )
+        return any(any(token in err for token in repairable_tokens) for err in planner_result.errors)
+
+    def _repair_schema_planner_payload(
+        self,
+        *,
+        original_payload: dict[str, Any],
+        request_payload: dict[str, Any],
+        system_instruction: str,
+        initial_result: Any,
+    ) -> Any | None:
+        from gmdgen.ai.schemas import AILevelPlanResponse
+        from gmdgen.ai.planner import parse_ollama_section_plan
+
+        repair_prompt = (
+            f"{system_instruction}\n\n"
+            "The previous JSON did not match the required planner schema.\n"
+            "Rewrite it as valid JSON only.\n"
+            "The top-level object must contain:\n"
+            '- "level_plan"\n'
+            '- "sections"\n'
+            'The "sections" field must be a non-empty top-level array.\n'
+            "Do not place sections inside level_plan.\n"
+            "Do not output markdown or explanations.\n"
+            "Do not output raw GMD, objects, triggers, scores, validation results, group IDs, or color channel IDs.\n\n"
+            "For this request, create a 198-second classic minimal Geometry Dash level plan with 8 to 12 sections.\n\n"
+            f"Previous invalid JSON:\n{json.dumps(original_payload, ensure_ascii=False)}\n\n"
+            f"Request context:\n{json.dumps(request_payload, ensure_ascii=False)}"
+        )
+        self._save_debug_artifact("planner_schema_repair_prompt.txt", repair_prompt)
+
+        def _failed_report(report: dict[str, Any], repair_response_preview: str | None = None) -> None:
+            report["planner_status"] = "fallback"
+            report["repair_prompt_sent"] = True
+            report["repair_success"] = False
+            report["planner_repair_success"] = False
+            report["planner_repair_reason"] = "schema_repair"
+            report["repair_response_preview"] = repair_response_preview
+            report["planner_repair_skipped_reason"] = ""
+            report["planner_failure_stage"] = report.get("planner_failure_stage") or "schema_repair"
+            if not report.get("planner_failure_reason_detail"):
+                report["planner_failure_reason_detail"] = "schema repair pass failed"
+            self._record_response_diagnostics(
+                raw_response=json.dumps(original_payload, ensure_ascii=False),
+                extracted=original_payload,
+                planner_report=report,
+            )
+
+        try:
+            repaired_dict = self._post(repair_prompt, retry_repair=False)
+        except OllamaProviderError:
+            report = initial_result.to_report_fields()
+            _failed_report(report, repair_response_preview=None)
+            return None
+
+        repaired_result = parse_ollama_section_plan(repaired_dict)
+        preview = json.dumps(repaired_dict, ensure_ascii=False)[:1000]
+        if not repaired_result.valid:
+            report = repaired_result.to_report_fields()
+            initial_report = initial_result.to_report_fields()
+            if not report.get("missing_required_fields"):
+                report["missing_required_fields"] = list(initial_report.get("missing_required_fields", []))
+            if not report.get("wrong_location_fields"):
+                report["wrong_location_fields"] = list(initial_report.get("wrong_location_fields", []))
+            _failed_report(report, repair_response_preview=preview)
+            self._save_debug_artifact("planner_schema_repair_failed.txt", "; ".join(repaired_result.errors))
+            return None
+
+        report = repaired_result.to_report_fields()
+        report["planner_status"] = "success_repaired"
+        report["repair_prompt_sent"] = True
+        report["repair_success"] = True
+        report["planner_repair_success"] = True
+        report["planner_repair_reason"] = "schema_repair"
+        report["repair_response_preview"] = preview
+        self._save_debug_artifact("planner_schema_repair_success.json", json.dumps(repaired_dict, ensure_ascii=False, indent=2))
+        return AILevelPlanResponse(
+            sections=[],
+            gameplay_events=[],
+            object_plans=[],
+            trigger_plans=[],
+            speed_plan=[],
+            reasoning_summary="Ollama returned a strict symbolic section plan after schema repair.",
+            safety_notes=repaired_dict.get("safety_notes", []),
+            expected_sync_notes=repaired_dict.get("expected_sync_notes", []),
+            metadata={
+                "planner_schema": "strict_section_plan_v1",
+                "planner_status": "success_repaired",
+                "planner_prompt_version": STRICT_SECTION_PLANNER_PROMPT_VERSION,
+                "planner_prompt_source": "gmdgen.ai.ollama_provider.OllamaProvider.generate_level_plan",
+                "planner_repair_attempted": True,
+                "planner_repair_reason": "schema_repair",
+                "planner_repair_success": True,
                 "planner_report": report,
                 "level_plan": repaired_dict.get("level_plan", {}),
                 "sections": repaired_dict.get("sections", []),

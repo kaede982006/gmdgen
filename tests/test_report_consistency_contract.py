@@ -118,3 +118,35 @@ def test_repair_requires_updated_metrics() -> None:
 
     assert result.passed is False
     assert "repair_metrics_not_updated_after_repair" in result.errors
+
+
+def test_missing_required_reason_requires_missing_required_fields() -> None:
+    report = _base_report()
+    report["final_success"] = False
+    report["planner_status"] = "fallback"
+    report["planner_fallback_used"] = True
+    report["planner_fallback_reason"] = "ollama_missing_required_field"
+    report["missing_required_fields"] = []
+    report["raw_ollama_response_preview"] = '{"level_plan":{"sections":[]}}'
+    report["extracted_json_preview"] = '{"level_plan":{"sections":[]}}'
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "missing_required_fields_empty_despite_missing_required_reason" in result.errors
+
+
+def test_repairable_planner_error_requires_repair_attempt_or_skip_reason() -> None:
+    report = _base_report()
+    report["final_success"] = False
+    report["planner_status"] = "fallback"
+    report["planner_fallback_used"] = True
+    report["planner_fallback_reason"] = "ollama_missing_required_field"
+    report["missing_required_fields"] = ["$.sections"]
+    report["raw_ollama_response_preview"] = '{"level_plan":{"sections":[]}}'
+    report["extracted_json_preview"] = '{"level_plan":{"sections":[]}}'
+    report["planner_repair_attempted"] = False
+    report["planner_repair_skipped_reason"] = ""
+
+    result = validate_generation_report_consistency(report)
+    assert result.passed is False
+    assert "repairable_planner_error_without_repair_attempt_or_skip_reason" in result.errors

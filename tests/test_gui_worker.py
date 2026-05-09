@@ -16,6 +16,7 @@ from gmdgen.gui.app import (
     redact_text,
     safe_gui_callback,
     summarize_generation_status,
+    summarize_planner_failure_details,
 )
 from gmdgen.learning.store import load_learning_examples
 from gmdgen.learning.feature_extractor import load_learned_data_store
@@ -278,3 +279,19 @@ def test_gui_status_distinguishes_low_quality_draft_from_success() -> None:
 
     assert summary["state"] == "low_quality_draft"
     assert summary["status"] == "Validation failed (draft saved)"
+
+
+def test_gui_planner_failure_summary_shows_missing_and_wrong_location() -> None:
+    text = summarize_planner_failure_details(
+        {
+            "planner_fallback_reason": "ollama_missing_required_field",
+            "missing_required_fields": ["$.sections"],
+            "wrong_location_fields": ["$.level_plan.sections"],
+            "schema_error_message": "sections must be a non-empty top-level array",
+            "final_success": False,
+        }
+    )
+    assert "Reason: ollama_missing_required_field" in text
+    assert "Missing fields: $.sections" in text
+    assert "Wrong location: $.level_plan.sections" in text
+    assert "Detail: sections must be a non-empty top-level array" in text

@@ -89,6 +89,30 @@ def summarize_generation_status(result: dict[str, Any]) -> dict[str, str]:
         "summary": "The run produced output, but the report did not mark it as final success.",
     }
 
+
+def summarize_planner_failure_details(result: dict[str, Any]) -> str:
+    report = result.get("validation_report", {})
+    if not isinstance(report, dict):
+        report = {}
+    reason = str(result.get("planner_fallback_reason") or result.get("ai_fallback_reason") or "planner_fallback")
+    missing = result.get("missing_required_fields", report.get("missing_required_fields", [])) or []
+    wrong_location = result.get("wrong_location_fields", report.get("wrong_location_fields", [])) or []
+    detail = (
+        result.get("schema_error_message")
+        or report.get("schema_error_message")
+        or result.get("planner_failure_reason_detail")
+        or report.get("planner_failure_reason_detail")
+        or "sections must be a non-empty top-level array"
+    )
+    lines = [f"Reason: {reason}"]
+    if missing:
+        lines.append(f"Missing fields: {', '.join(str(item) for item in missing)}")
+    if wrong_location:
+        lines.append(f"Wrong location: {', '.join(str(item) for item in wrong_location)}")
+    lines.append(f"Detail: {detail}")
+    return "\n".join(lines)
+
+
 @dataclass(slots=True)
 class GuiGenerationConfig:
     audio_file: str
@@ -1548,6 +1572,7 @@ def launch_gui() -> int:
                     if forbidden_fields
                     else ""
                 )
+                planner_details = summarize_planner_failure_details(result)
                 self._append_log(f"[generate:fallback] {fallback_reason}")
                 
                 passed_str = str(validation.get('passed', 'unknown')).lower() if isinstance(validation, dict) else 'unknown'
@@ -1557,7 +1582,7 @@ def launch_gui() -> int:
                         "- Ollama planner output did not match the required schema.\n"
                         "- A deterministic fallback draft was saved only for inspection.\n"
                         "- This is not an AI-planned final success.\n\n"
-                        f"Reason: {fallback_reason}\n"
+                        f"{planner_details}\n"
                         f"{forbidden_text}"
                         f"Serialized draft validation: {passed_str}\n"
                         f"Final success: false\n"

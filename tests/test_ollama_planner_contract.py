@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gmdgen.ai.ollama_provider import OllamaInvalidSchema, OllamaProvider
+from gmdgen.ai.ollama_provider import OllamaInvalidSchema, OllamaMissingRequiredField, OllamaProvider
 from gmdgen.ai.planner import parse_ollama_section_plan, parse_or_fallback_planner_output
 from gmdgen.ai.schemas import AILevelPlanResponse
 from gmdgen.audio.analysis import AudioAnalysisResult
@@ -150,6 +150,115 @@ def test_ollama_provider_repairs_forbidden_fields_once() -> None:
     report = response.metadata["planner_report"]
     assert report["forbidden_fields"] == ["object_plans", "score"]
     assert report["forbidden_field_paths"]
+
+
+def test_ollama_provider_repairs_missing_sections_shape_once() -> None:
+    calls = {"count": 0}
+
+    repaired_payload = {
+        "level_plan": {
+            "level_name": "Stereo Madness 198",
+            "difficulty": "easy",
+            "target_duration": 198.0,
+            "object_budget": 3000,
+            "style": "classic_minimal",
+            "sync_intensity": "medium",
+        },
+        "sections": [
+            {
+                "section_id": "s001",
+                "time_start": 0.0,
+                "time_end": 20.0,
+                "game_mode": "cube",
+                "speed": "1x",
+                "density": 0.25,
+                "primary_pattern": "simple_cube_intro",
+                "allowed_object_families": ["block", "spike", "orb", "pad"],
+                "forbidden_features": ["glow_spam"],
+                "trigger_budget": 0,
+                "group_symbols": [],
+                "design_notes": "intro",
+            }
+        ],
+    }
+
+    def client(_payload: dict) -> dict:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {"response": json.dumps({"level_plan": {"sections": []}})}
+        return {"response": json.dumps(repaired_payload)}
+
+    provider = OllamaProvider(model="unit-test", client=client, max_retries=0)
+    response = provider.generate_level_plan({"project_goal": "repair missing sections"})
+    report = response.metadata["planner_report"]
+
+    assert calls["count"] == 2
+    assert response.metadata["planner_status"] == "success_repaired"
+    assert response.metadata["planner_repair_attempted"] is True
+    assert response.metadata["planner_repair_success"] is True
+    assert report["repair_prompt_sent"] is True
+    assert report["repair_success"] is True
+
+
+def test_ollama_provider_schema_repair_failure_keeps_fallback_reason_clear() -> None:
+    calls = {"count": 0}
+
+    def client(_payload: dict) -> dict:
+        calls["count"] += 1
+        return {"response": json.dumps({"level_plan": {"sections": []}})}
+
+    provider = OllamaProvider(model="unit-test", client=client, max_retries=0)
+    with pytest.raises(OllamaMissingRequiredField):
+        provider.generate_level_plan({"project_goal": "repair should fail"})
+
+    assert calls["count"] == 2
+    diag = provider.last_response_diagnostics
+    assert diag["repair_prompt_sent"] is True
+    assert diag["repair_success"] is False
+    assert "$.sections" in diag["missing_required_fields"]
+
+
+def test_ollama_provider_repairs_when_top_level_sections_empty() -> None:
+    calls = {"count": 0}
+
+    repaired_payload = {
+        "level_plan": {
+            "level_name": "Recovered",
+            "difficulty": "normal",
+            "target_duration": 30.0,
+            "object_budget": 500,
+            "style": "classic",
+            "sync_intensity": "medium",
+        },
+        "sections": [
+            {
+                "section_id": "s001",
+                "time_start": 0.0,
+                "time_end": 10.0,
+                "game_mode": "cube",
+                "speed": "1x",
+                "density": 0.3,
+                "primary_pattern": "intro",
+                "allowed_object_families": ["block", "spike", "orb", "pad"],
+                "forbidden_features": [],
+                "trigger_budget": 0,
+                "group_symbols": [],
+                "design_notes": "",
+            }
+        ],
+    }
+
+    def client(_payload: dict) -> dict:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return {"response": json.dumps({"level_plan": repaired_payload["level_plan"], "sections": []})}
+        return {"response": json.dumps(repaired_payload)}
+
+    provider = OllamaProvider(model="unit-test", client=client, max_retries=0)
+    response = provider.generate_level_plan({"project_goal": "repair empty sections"})
+
+    assert calls["count"] == 2
+    assert response.metadata["planner_status"] == "success_repaired"
 
 
 def test_production_ollama_path_falls_back_on_legacy_object_plans() -> None:

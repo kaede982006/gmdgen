@@ -276,11 +276,23 @@ class ValidationReport:
     planner_prompt_source: str = ""
     planner_repair_attempted: bool = False
     planner_repair_reason: str = ""
+    planner_repair_success: bool | None = None
+    planner_repair_skipped_reason: str = ""
     raw_ollama_response_preview: str | None = None
     extracted_json_preview: str | None = None
     forbidden_fields: list[str] = field(default_factory=list)
     forbidden_field_paths: list[str] = field(default_factory=list)
     schema_error_path: str | None = None
+    missing_required_fields: list[str] = field(default_factory=list)
+    empty_required_fields: list[str] = field(default_factory=list)
+    wrong_location_fields: list[str] = field(default_factory=list)
+    schema_error_message: str | None = None
+    planner_failure_stage: str | None = None
+    planner_failure_reason_detail: str | None = None
+    normalized_shape_repairs: list[str] = field(default_factory=list)
+    repair_prompt_sent: bool = False
+    repair_response_preview: str | None = None
+    repair_success: bool | None = None
     ollama_context_legacy_symbols_found: list[str] = field(default_factory=list)
     ollama_context_legacy_symbol_paths: list[str] = field(default_factory=list)
     candidate_ir_objects: int = 0
@@ -409,11 +421,23 @@ class ValidationReport:
             "planner_prompt_source": self.planner_prompt_source,
             "planner_repair_attempted": self.planner_repair_attempted,
             "planner_repair_reason": self.planner_repair_reason,
+            "planner_repair_success": self.planner_repair_success,
+            "planner_repair_skipped_reason": self.planner_repair_skipped_reason,
             "raw_ollama_response_preview": self.raw_ollama_response_preview,
             "extracted_json_preview": self.extracted_json_preview,
             "forbidden_fields": list(self.forbidden_fields),
             "forbidden_field_paths": list(self.forbidden_field_paths),
             "schema_error_path": self.schema_error_path,
+            "missing_required_fields": list(self.missing_required_fields),
+            "empty_required_fields": list(self.empty_required_fields),
+            "wrong_location_fields": list(self.wrong_location_fields),
+            "schema_error_message": self.schema_error_message,
+            "planner_failure_stage": self.planner_failure_stage,
+            "planner_failure_reason_detail": self.planner_failure_reason_detail,
+            "normalized_shape_repairs": list(self.normalized_shape_repairs),
+            "repair_prompt_sent": self.repair_prompt_sent,
+            "repair_response_preview": self.repair_response_preview,
+            "repair_success": self.repair_success,
             "ollama_context_legacy_symbols_found": list(self.ollama_context_legacy_symbols_found),
             "ollama_context_legacy_symbol_paths": list(self.ollama_context_legacy_symbol_paths),
             "candidate_ir_objects": self.candidate_ir_objects,
