@@ -49,8 +49,6 @@ Thumbs.db
 .aider*
 
 artifacts/
-
-artifacts/
 release_artifacts/
 dataset/local_coder_memory/outputs/
 
@@ -60,12 +58,14 @@ dataset/*
 *.wav
 *.mp3
 *.ogg
-*.zip*.pyc
+*.zip
+*.pyc
 *.pyo
 src/*.egg-info/
 
 # Claude Code worktrees and local agent state
 .claude/
+skills/
 
 # Release artifacts (built locally, not tracked)
 release_assets/

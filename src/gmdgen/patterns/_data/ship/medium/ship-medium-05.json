@@ -5,103 +5,103 @@
   "length_beats": 8,
   "objects": [
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 0.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "5",
+      "id": "1",
       "x_beat": 1.0,
+      "y": 105,
+      "role": "structural"
+    },
+    {
+      "id": "2",
+      "x_beat": 2.0,
       "y": 105,
       "role": "structural"
     },
     {
       "id": "4",
-      "x_beat": 2.0,
-      "y": 105,
-      "role": "structural"
-    },
-    {
-      "id": "2",
       "x_beat": 3.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "3",
       "x_beat": 4.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "2",
       "x_beat": 5.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 6.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "5",
+      "id": "3",
       "x_beat": 7.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "2",
+      "id": "5",
       "x_beat": 0.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "2",
+      "id": "3",
       "x_beat": 1.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 2.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "5",
+      "id": "6",
       "x_beat": 3.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 4.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "4",
       "x_beat": 5.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 6.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "2",
+      "id": "1",
       "x_beat": 7.0,
       "y": 255,
       "role": "structural"
     },
     {
-      "id": "8",
+      "id": "103",
       "x_beat": 0.5,
       "y": 195,
       "role": "gameplay"
@@ -113,20 +113,20 @@
       "role": "gameplay"
     },
     {
-      "id": "39",
+      "id": "9",
       "x_beat": 5.83,
       "y": 195,
       "role": "gameplay"
     },
     {
-      "id": "211",
-      "x_beat": 6.78,
-      "y": 315,
+      "id": "266",
+      "x_beat": 3.93,
+      "y": 285,
       "role": "decoration"
     },
     {
-      "id": "259",
-      "x_beat": 6.41,
+      "id": "266",
+      "x_beat": 0.61,
       "y": 315,
       "role": "decoration"
     }

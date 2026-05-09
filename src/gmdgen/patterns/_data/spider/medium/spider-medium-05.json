@@ -5,7 +5,7 @@
   "length_beats": 8,
   "objects": [
     {
-      "id": "5",
+      "id": "2",
       "x_beat": 0.0,
       "y": 105,
       "role": "structural"
@@ -17,69 +17,69 @@
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "2",
       "x_beat": 2.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "2",
       "x_beat": 3.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "5",
       "x_beat": 4.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "2",
+      "id": "3",
       "x_beat": 5.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "2",
+      "id": "3",
       "x_beat": 6.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "3",
       "x_beat": 7.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "67",
+      "id": "140",
       "x_beat": 0.0,
       "y": 105,
       "role": "gameplay"
     },
     {
-      "id": "67",
+      "id": "140",
       "x_beat": 1.0,
       "y": 105,
       "role": "gameplay"
     },
     {
-      "id": "35",
+      "id": "140",
       "x_beat": 2.0,
       "y": 105,
       "role": "gameplay"
     },
     {
-      "id": "503",
-      "x_beat": 5.84,
-      "y": 285,
+      "id": "266",
+      "x_beat": 6.97,
+      "y": 315,
       "role": "decoration"
     },
     {
-      "id": "211",
-      "x_beat": 2.65,
-      "y": 285,
+      "id": "1734",
+      "x_beat": 6.25,
+      "y": 315,
       "role": "decoration"
     }
   ],

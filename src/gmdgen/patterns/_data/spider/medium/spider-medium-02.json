@@ -11,19 +11,19 @@
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "2",
       "x_beat": 1.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "1",
       "x_beat": 2.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "4",
+      "id": "6",
       "x_beat": 3.0,
       "y": 105,
       "role": "structural"
@@ -35,7 +35,7 @@
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "1",
       "x_beat": 5.0,
       "y": 105,
       "role": "structural"
@@ -59,26 +59,26 @@
       "role": "gameplay"
     },
     {
-      "id": "35",
+      "id": "67",
       "x_beat": 1.0,
       "y": 105,
       "role": "gameplay"
     },
     {
-      "id": "35",
+      "id": "67",
       "x_beat": 2.0,
       "y": 105,
       "role": "gameplay"
     },
     {
       "id": "211",
-      "x_beat": 1.43,
-      "y": 315,
+      "x_beat": 2.09,
+      "y": 285,
       "role": "decoration"
     },
     {
-      "id": "1736",
-      "x_beat": 5.01,
+      "id": "1734",
+      "x_beat": 3.24,
       "y": 315,
       "role": "decoration"
     }

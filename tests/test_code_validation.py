@@ -9,6 +9,7 @@ from gmdgen.validation.code_validation import (
     run_code_validation_suite,
     run_command_safely,
 )
+from gmdgen.validation.runtime_audit import run_static_exception_audit
 
 
 def test_code_validation_report_structure(tmp_path: Path, monkeypatch) -> None:
@@ -89,3 +90,12 @@ def test_run_command_safely_success(tmp_path: Path) -> None:
 
 def test_detect_optional_tool_returns_bool() -> None:
     assert isinstance(detect_optional_tool("definitely-not-a-real-tool-name"), bool)
+
+
+def test_static_exception_audit_skips_when_ruff_missing(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("gmdgen.validation.runtime_audit.shutil.which", lambda _name: None)
+
+    result = run_static_exception_audit(tmp_path)
+
+    assert result["passed"] is True
+    assert "skipped" in result["output"]

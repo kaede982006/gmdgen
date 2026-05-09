@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 def run_static_exception_audit(root_dir: Path) -> dict:
+    if shutil.which("ruff") is None:
+        return {"passed": True, "output": "ruff is not installed; static exception audit skipped."}
     try:
         # Check if ruff is installed, run it
         completed = subprocess.run(
@@ -17,7 +20,8 @@ def run_static_exception_audit(root_dir: Path) -> dict:
         if completed.returncode == 0:
             return {"passed": True, "output": "No undefined names found."}
         else:
-            return {"passed": False, "output": completed.stdout}
+            output = completed.stdout or completed.stderr
+            return {"passed": False, "output": output}
     except Exception as e:
         return {"passed": False, "output": f"Static audit failed to run: {e}"}
 

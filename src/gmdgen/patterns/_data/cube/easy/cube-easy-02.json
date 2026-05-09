@@ -5,25 +5,25 @@
   "length_beats": 8,
   "objects": [
     {
-      "id": "4",
+      "id": "2",
       "x_beat": 0.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "6",
       "x_beat": 1.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "6",
       "x_beat": 2.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "2",
       "x_beat": 3.0,
       "y": 105,
       "role": "structural"
@@ -35,19 +35,19 @@
       "role": "structural"
     },
     {
-      "id": "3",
+      "id": "5",
       "x_beat": 5.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "6",
+      "id": "4",
       "x_beat": 6.0,
       "y": 105,
       "role": "structural"
     },
     {
-      "id": "1",
+      "id": "6",
       "x_beat": 7.0,
       "y": 105,
       "role": "structural"
@@ -66,13 +66,13 @@
     },
     {
       "id": "259",
-      "x_beat": 1.7,
+      "x_beat": 3.78,
       "y": 315,
       "role": "decoration"
     },
     {
-      "id": "503",
-      "x_beat": 0.25,
+      "id": "211",
+      "x_beat": 6.93,
       "y": 315,
       "role": "decoration"
     }
