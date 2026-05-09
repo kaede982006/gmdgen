@@ -738,9 +738,16 @@ def generate_from_config(config: dict[str, Any]) -> dict[str, Any]:
                         result = dict(e.details)
                         result["quality_gate_passed"] = False
                         result["quality_gate_failure"] = str(e)
+                        result["low_quality_draft_saved"] = True
+                        result["final_success"] = False
+                        result["planner_fallback_used"] = bool(result.get("planner_fallback_used", False))
                         # Ensure basic fields exist for GUI compatibility
-                        result["output_path"] = str(Path(config.get("output_dir", "outputs")) / f"{config.get('output_name', 'draft')}_low_quality_draft.gmd")
-                        result["score"] = e.details.get("score_breakdown", {})
+                        result.setdefault("output_path", str(Path(config.get("output_dir", "outputs")) / f"{config.get('output_name', 'draft')}_low_quality_draft.gmd"))
+                        result.setdefault("score", e.details.get("score_breakdown", {}))
+                        if isinstance(result.get("validation_report"), dict):
+                            result["validation_report"]["quality_gate_passed"] = False
+                            result["validation_report"]["low_quality_draft_saved"] = True
+                            result["validation_report"]["final_success"] = False
                         break
                     raise
                 
@@ -1211,6 +1218,20 @@ def _gmdgen_final_result_defaults_v4(result):
         }
 
     result.setdefault("quality_gate_passed", True)
+    result.setdefault("planner_status", "not_used")
+    result.setdefault("planner_fallback_used", False)
+    result.setdefault("low_quality_draft_saved", False)
+    result.setdefault(
+        "final_success",
+        bool(result.get("quality_gate_passed", True)) and not bool(result.get("planner_fallback_used", False)),
+    )
+    if isinstance(result.get("validation_report"), dict):
+        report = result["validation_report"]
+        report.setdefault("planner_status", result.get("planner_status", "not_used"))
+        report.setdefault("planner_fallback_used", result.get("planner_fallback_used", False))
+        report.setdefault("quality_gate_passed", result.get("quality_gate_passed", True))
+        report.setdefault("low_quality_draft_saved", result.get("low_quality_draft_saved", False))
+        report.setdefault("final_success", result.get("final_success", False))
     result.setdefault("warnings", [])
 
     return result
@@ -1279,4 +1300,3 @@ def _gmdgen_style_only_missing_artifact_v4(
 
     report_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
-

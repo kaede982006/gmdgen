@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from gmdgen.gui.app import GuiApplication, GuiGenerationConfig, GuiGenerationWorker, redact_text, safe_gui_callback
+from gmdgen.gui.app import (
+    GuiApplication,
+    GuiGenerationConfig,
+    GuiGenerationWorker,
+    redact_text,
+    safe_gui_callback,
+    summarize_generation_status,
+)
 from gmdgen.learning.store import load_learning_examples
 from gmdgen.learning.feature_extractor import load_learned_data_store
 
@@ -232,3 +239,31 @@ def test_gui_report_contains_quality_fields(tmp_path: Path) -> None:
     assert "quality_loss_reason_summary" in report
     assert "drop_impact_score" in report
     assert "density_target_error" in report
+
+
+def test_gui_status_distinguishes_fallback_from_success() -> None:
+    summary = summarize_generation_status(
+        {
+            "planner_fallback_used": True,
+            "quality_gate_passed": True,
+            "final_success": False,
+            "output_path": "out.gmd",
+        }
+    )
+
+    assert summary["state"] == "fallback_draft"
+    assert "Fallback" in summary["title"]
+
+
+def test_gui_status_distinguishes_low_quality_draft_from_success() -> None:
+    summary = summarize_generation_status(
+        {
+            "planner_fallback_used": False,
+            "quality_gate_passed": False,
+            "low_quality_draft_saved": True,
+            "final_success": False,
+        }
+    )
+
+    assert summary["state"] == "low_quality_draft"
+    assert summary["status"] == "Validation failed (draft saved)"

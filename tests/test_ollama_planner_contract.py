@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from gmdgen.ai.ollama_provider import OllamaInvalidSchema, OllamaProvider
+from gmdgen.ai.planner import parse_ollama_section_plan, parse_or_fallback_planner_output
+from gmdgen.ai.schemas import AILevelPlanResponse
+from gmdgen.audio.analysis import AudioAnalysisResult
+from gmdgen.generate.audio_conditioned import _maybe_apply_ai_provider
+
+
+def _valid_payload() -> dict:
+    return {
+        "level_plan": {
+            "level_name": "Unit Plan",
+            "difficulty": "normal",
+            "target_duration": 30.0,
+            "object_budget": 500,
+            "style": "modern_glow",
+            "sync_intensity": "medium",
+        },
+        "sections": [
+            {
+                "section_id": "s001",
+                "time_start": 0.0,
+                "time_end": 8.0,
+                "game_mode": "cube",
+                "speed": "1x",
+                "density": 0.35,
+                "primary_pattern": "intro_platforming",
+                "allowed_object_families": ["block", "spike", "orb", "pad"],
+                "forbidden_features": ["unbounded_trigger_spam"],
+                "trigger_budget": 3,
+                "group_symbols": ["intro_blocks"],
+                "design_notes": "short readable intro",
+            }
+        ],
+    }
+
+
+def test_ollama_planner_rejects_raw_gmd_output() -> None:
+    result = parse_ollama_section_plan("1,100,2,30,3,90;1,101,2,60,3,120")
+
+    assert result.plan is None
+    assert "raw_gmd_output_rejected" in result.errors
+
+
+def test_ollama_planner_rejects_concrete_group_and_color_ids() -> None:
+    payload = _valid_payload()
+    payload["sections"][0]["group_id"] = 17
+    payload["sections"][0]["color_channel_id"] = 3
+
+    result = parse_ollama_section_plan(payload)
+
+    assert result.plan is None
+    assert any("group_id:forbidden_planner_field" in error for error in result.errors)
+    assert any("color_channel_id:forbidden_planner_field" in error for error in result.errors)
+
+
+def test_schema_mismatch_uses_template_fallback_and_records_report_fields() -> None:
+    result = parse_or_fallback_planner_output(
+        {"sections": [{"section_id": "s001", "game_mode": "not-a-mode"}]},
+        prompt="make a readable intro",
+        fallback_level_name="fallback",
+        object_budget=123,
+    )
+
+    assert result.plan is not None
+    assert result.fallback_used is True
+    assert result.plan.object_budget == 123
+    fields = result.to_report_fields()
+    assert fields["planner_fallback_used"] is True
+    assert fields["planner_status"] == "fallback"
+
+
+def test_valid_planner_output_uses_symbolic_references_only() -> None:
+    result = parse_ollama_section_plan(_valid_payload())
+
+    assert result.valid is True
+    assert result.plan is not None
+    section = result.plan.sections[0]
+    assert section.group_symbols[0].name == "intro_blocks"
+    assert not hasattr(section.group_symbols[0], "id")
+
+
+def test_ollama_provider_rejects_legacy_object_plan_response() -> None:
+    provider = OllamaProvider(
+        model="unit-test",
+        client=lambda _payload: {
+            "response": json.dumps(
+                {
+                    "sections": [],
+                    "object_plans": [{"object_id": 1, "x": 30, "y": 90, "role": "ai_structure"}],
+                    "trigger_plans": [],
+                }
+            )
+        },
+        max_retries=0,
+    )
+
+    with pytest.raises(OllamaInvalidSchema):
+        provider.generate_level_plan({"project_goal": "legacy output must be rejected"})
+
+
+def test_production_ollama_path_falls_back_on_legacy_object_plans() -> None:
+    features = MagicMock(spec=AudioAnalysisResult)
+    features.sections = []
+    features.beat_times = []
+    features.onset_times = []
+    features.duration = 10.0
+    features.bpm = 120.0
+    features.confidence = 0.8
+    features.confidence_report = None
+    features.beat_features = []
+
+    mock_provider = MagicMock()
+    mock_provider.generate_level_plan.return_value = AILevelPlanResponse(
+        object_plans=[{"object_id": 1, "x": 30, "y": 90, "role": "ai_structure"}],
+        trigger_plans=[],
+        provider="ollama",
+        model="legacy-mock",
+    )
+
+    with patch("gmdgen.generate.audio_conditioned.create_ai_provider_from_config", return_value=mock_provider):
+        conversion, metadata = _maybe_apply_ai_provider(
+            config={"use_ai_planner": True, "require_ai_planning": False, "ai_candidate_count": 1},
+            features=features,
+            section_plans=[],
+            time_x_report={},
+            style_profile={},
+            object_budget=100,
+            max_group_id=999,
+            safe_mode=True,
+            start_speed="normal",
+            song_offset=0.0,
+        )
+
+    assert conversion.response is not None
+    assert conversion.response.provider == "local"
+    assert conversion.response.fallback_used is True
+    assert metadata["deterministic_fallback_used"] is True
+    assert metadata["ai_planning_error"] == "ai_output_invalid"

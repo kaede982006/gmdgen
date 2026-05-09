@@ -5,8 +5,19 @@ structure-first generation and optional Ollama-based AI planning.
 
 The runtime AI provider is **Ollama only**. Gemini, OpenAI, and other
 cloud providers are intentionally not supported as runtime providers.
-Ollama is used to produce structured JSON plans (not raw `.gmd` save
-strings); deterministic algorithms then materialize the level.
+Ollama is used only as a strict section planner. It may return `level_plan`
+and symbolic `sections` JSON, but it may not return raw `.gmd` save strings,
+concrete group ids, concrete color channel ids, final scores, or validation
+verdicts. Deterministic local IR, allocation, serialization, validation,
+repair, and report consistency decide whether a final `.gmd` exists.
+
+Architecture references:
+
+- `docs/algorithmic_background.md`
+- `docs/ollama_planner_architecture.md`
+- `docs/gmd_generation_pipeline.md`
+- `docs/generation_report_contract.md`
+- `docs/data_cleaning_and_pattern_schema.md`
 
 ## Installation
 
@@ -21,8 +32,9 @@ Recommended Ollama model: `qwen2.5-coder:7b`.
 
 `gmdgen` uses [Ollama](https://ollama.com/) as its local inference backend.
 All AI calls go through the Ollama HTTP API; no cloud provider is required.
-Deterministic generation also works with Ollama unavailable — in that case
-`gmdgen` falls back to its built-in safe palette and motif families.
+Deterministic generation also works with Ollama unavailable. In that case
+`gmdgen` may save a fallback draft, but fallback is degraded mode, not AI
+generation quality success.
 
 ### 1. Install Ollama
 
@@ -142,13 +154,14 @@ python -m pytest -q       # full test suite (no live Ollama required)
 
 ## Quality model (HSR)
 
-`gmdgen` uses **Hierarchical Structural Representation**: the AI emits
-only a `LevelPlan` (~few hundred tokens, JSON-schema enforced); a
-deterministic expander then builds the level from a pattern library
-covering all 7 game modes × 3 difficulty tiers (≥6 patterns per cell).
-Five structural invariants (object count band, trigger floor, ground
-coverage, jumpable path, type variety) are enforced before save —
-candidates that fail are rejected, never repaired into existence.
+`gmdgen` uses a local structure-first pipeline. Ollama emits only symbolic
+planning JSON; local code decodes it into IR, allocates group and color ids,
+serializes the level, validates syntax/semantics/playability, repairs allowed
+local defects, and checks report consistency. A quality score is one input to
+the gate, not the sole quality verdict.
+
+Low-quality drafts are failure-analysis artifacts. They are intentionally
+reported separately from final success.
 
 ## Logging & observability
 
@@ -160,9 +173,10 @@ auto-silence in non-TTY environments.
 ## Dataset
 
 `dataset/` is intentionally empty in the released package; users provide
-their own reference `.gmd` files. With an empty dataset, the generator
-falls back to a built-in safe palette and motif families. With a populated
-dataset, learned palettes and density profiles are used as priors.
+their own reference `.gmd` files. With an empty dataset, the generator uses a
+built-in safe palette and motif families. With a populated dataset, learned
+palettes and density profiles are used as priors. Dataset cleaning is
+report-first and non-destructive.
 
 ## License
 
@@ -177,4 +191,6 @@ the Free Software Foundation, either version 3 of the License, or
 python -m pytest -q
 ```
 
-Expected: `664 passed, 17 skipped`.
+Expected: the full suite passes without live Ollama. Optional static tools such
+as `ruff`, `mypy`, and `pyright` are skipped or warned when not installed;
+compile and import failures remain hard failures.

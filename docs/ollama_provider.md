@@ -1,4 +1,11 @@
 # Ollama Provider
+
+Ollama is a strict planner provider. Its accepted output is the symbolic
+`level_plan` + `sections` contract described in
+`docs/ollama_planner_architecture.md`. The provider rejects raw `.gmd`, legacy
+direct `object_plans`, concrete group/color ids, scores, and validation
+verdicts.
+
 Ollama Error Codes:
 - ollama_server_unavailable
 - ollama_model_missing

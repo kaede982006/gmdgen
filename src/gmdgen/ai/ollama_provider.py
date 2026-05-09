@@ -362,6 +362,7 @@ class OllamaProvider(LevelGenerationAIProvider):
 
     def generate_level_plan(self, request: Any) -> Any:
         from gmdgen.ai.schemas import AILevelPlanResponse
+        from gmdgen.ai.planner import parse_ollama_section_plan
         try:
             req_dict = request.to_dict()
         except AttributeError:
@@ -369,17 +370,25 @@ class OllamaProvider(LevelGenerationAIProvider):
             
         prompt = json.dumps(req_dict, ensure_ascii=False)
         raw_dict = self._post(prompt)
+        planner_result = parse_ollama_section_plan(raw_dict)
+        if not planner_result.valid:
+            raise OllamaInvalidSchema("; ".join(planner_result.errors))
         
         return AILevelPlanResponse(
-            sections=raw_dict.get("sections", []),
-            gameplay_events=raw_dict.get("gameplay_events", []),
-            object_plans=raw_dict.get("object_plans", []),
-            trigger_plans=raw_dict.get("trigger_plans", []),
-            speed_plan=raw_dict.get("speed_plan", []),
-            reasoning_summary=raw_dict.get("reasoning_summary", ""),
+            sections=[],
+            gameplay_events=[],
+            object_plans=[],
+            trigger_plans=[],
+            speed_plan=[],
+            reasoning_summary="Ollama returned a strict symbolic section plan.",
             safety_notes=raw_dict.get("safety_notes", []),
             expected_sync_notes=raw_dict.get("expected_sync_notes", []),
-            metadata=raw_dict.get("metadata", {}),
+            metadata={
+                "planner_schema": "strict_section_plan_v1",
+                "planner_report": planner_result.to_report_fields(),
+                "level_plan": raw_dict.get("level_plan", {}),
+                "sections": raw_dict.get("sections", []),
+            },
             provider="ollama",
             model=self.model,
         )

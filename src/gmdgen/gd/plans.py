@@ -269,6 +269,21 @@ class ValidationReport:
     quality_gate_report: dict[str, Any] = field(default_factory=dict)
     quality_mode: str = "Balanced"
     plan_count_report: PlanCountReport = field(default_factory=PlanCountReport)
+    planner_status: str = "not_used"
+    planner_fallback_used: bool = False
+    planner_fallback_reason: str = ""
+    candidate_ir_objects: int = 0
+    serialized_objects: int = 0
+    final_objects: int = 0
+    syntax_validation: dict[str, Any] = field(default_factory=dict)
+    semantic_validation: dict[str, Any] = field(default_factory=dict)
+    playability_validation: dict[str, Any] = field(default_factory=dict)
+    repair_applied: bool = False
+    repair_loss: float = 0.0
+    quality_gate_passed: bool = False
+    low_quality_draft_saved: bool = False
+    final_success: bool = False
+    report_consistency: dict[str, Any] = field(default_factory=dict)
 
     def add_issue(self, message: str) -> None:
         self.valid = False
@@ -373,6 +388,21 @@ class ValidationReport:
             "quality_gate_report": dict(self.quality_gate_report),
             "quality_mode": self.quality_mode,
             "plan_count_report": self.plan_count_report.to_dict(),
+            "planner_status": self.planner_status,
+            "planner_fallback_used": self.planner_fallback_used,
+            "planner_fallback_reason": self.planner_fallback_reason,
+            "candidate_ir_objects": self.candidate_ir_objects,
+            "serialized_objects": self.serialized_objects,
+            "final_objects": self.final_objects,
+            "syntax_validation": dict(self.syntax_validation),
+            "semantic_validation": dict(self.semantic_validation),
+            "playability_validation": dict(self.playability_validation),
+            "repair_applied": self.repair_applied,
+            "repair_loss": self.repair_loss,
+            "quality_gate_passed": self.quality_gate_passed,
+            "low_quality_draft_saved": self.low_quality_draft_saved,
+            "final_success": self.final_success,
+            "report_consistency": dict(self.report_consistency),
         }
 
 

@@ -108,6 +108,7 @@ from gmdgen.learning.feature_extractor import (
     load_learned_data_store,
     summarize_learned_data_for_prompt,
 )
+from gmdgen.validation.report_consistency import validate_generation_report_consistency
 from gmdgen.learning.store import summarize_learning_examples_for_context
 from gmdgen.io.gmd_decoder import (
     decode_level_data,
@@ -331,9 +332,9 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
 
     if ai_conversion.valid:
         if ai_conversion.object_plans:
-            # AI suggested objects are prioritized if valid
-            # In new mode, AI only suggests a few, materializer expands
-            # For now, we keep the simple merge
+            # Deprecated non-Ollama compatibility path. Production Ollama
+            # responses are strict symbolic section plans and are rejected
+            # above if they contain object-level model output.
             ai_budget = max(0, object_budget - len(object_plans) - len(trigger_plans))
             object_plans.extend(ai_conversion.object_plans[:ai_budget])
         if ai_conversion.trigger_plans:
@@ -587,6 +588,9 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         section_plans=section_plans,
         level_objects=level_objects,
     )
+    if save_res and save_res.success:
+        validation_report.plan_count_report.actual_saved_objects = final_plan_snapshot.object_count
+        validation_report.plan_count_report.actual_saved_triggers = final_plan_snapshot.trigger_count
     validation_report.quality_mode = str(config.get("quality_mode", "Balanced"))
     validation_report.quality_gate_report = evaluate_quality_gate(
         validation_report.to_dict(),
@@ -600,6 +604,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
             min_playability=float(config.get("quality_gate_min_playability", 0.5)),
         ),
     ).to_dict()
+    validation_report.quality_gate_passed = bool(validation_report.quality_gate_report.get("passed", False))
     
     total_generation_seconds = time.time() - start_total_time
     validation_report.metrics.update({
@@ -612,13 +617,57 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         "scoring_seconds": scoring_seconds,
         "total_generation_seconds": total_generation_seconds,
     })
+    validation_report.final_success = (
+        validation_report.quality_gate_passed
+        and validation_report.round_trip_valid
+        and validation_report.valid
+        and not validation_report.planner_fallback_used
+        and not validation_report.low_quality_draft_saved
+    )
+    validation_report.report_consistency = validate_generation_report_consistency(
+        validation_report.to_dict(),
+        hard=False,
+    ).to_dict()
+    if validation_report.report_consistency.get("errors"):
+        for issue in validation_report.report_consistency["errors"]:
+            validation_report.add_issue(f"report_consistency_failed: {issue}")
+        validation_report.quality_gate_passed = False
+        validation_report.final_success = False
+        validation_report.quality_gate_report.setdefault("failures", [])
+        validation_report.quality_gate_report["failures"].extend(
+            f"report_consistency_failed: {issue}"
+            for issue in validation_report.report_consistency["errors"]
+        )
+        validation_report.quality_gate_report["passed"] = False
 
     if bool(config.get("enforce_quality_gate", True)) and not validation_report.quality_gate_report.get("passed", False):
         failure_msg = "quality_gate_failed: " + "; ".join(validation_report.quality_gate_report.get("failures", [])[:4])
         validation_report.add_issue(failure_msg)
+        draft_save_res = save_res
+        if save_draft:
+            draft_save_res = save_level_output(
+                encoded_level_data=encoded_level_data,
+                output_path=output_dir / f"{output_name}_low_quality_draft.gmd",
+                tags=tags,
+                is_draft=True,
+                quality_gate_passed=False,
+                default_name=f"{output_name}_low_quality_draft",
+            )
+            validation_report.low_quality_draft_saved = bool(draft_save_res.success and draft_save_res.file_exists)
+            validation_report.final_success = False
+            validation_report.report_consistency = validate_generation_report_consistency(
+                validation_report.to_dict(),
+                hard=False,
+            ).to_dict()
         if save_draft and report_path:
             _save_final_report(validation_report, report_path)
-        raise QualityGateFailure(failure_msg, details=validation_report.to_dict())
+        failure_details = validation_report.to_dict()
+        failure_details["output_path"] = draft_save_res.resolved_output_path or str(output_path)
+        failure_details["save_result"] = draft_save_res.to_dict()
+        failure_details["quality_gate_passed"] = False
+        failure_details["low_quality_draft_saved"] = validation_report.low_quality_draft_saved
+        failure_details["final_success"] = False
+        raise QualityGateFailure(failure_msg, details=failure_details)
     
     if bool(config.get("ollama_save_debug_artifacts", False) or config.get("save_debug_bundle", False)):
         validation_report.ai_debug_artifact_path = _save_quality_debug_artifacts(
@@ -660,9 +709,24 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         "selected_section_count": validation_report.selected_section_count,
         "global_consistency_report": validation_report.global_consistency_report,
         "quality_gate_report": validation_report.quality_gate_report,
+        "quality_gate_passed": validation_report.quality_gate_passed,
         "quality_mode": validation_report.quality_mode,
         "quality_loss_reason_summary": validation_report.quality_loss_reason_summary,
         "repair_quality_report": validation_report.repair_quality_report,
+        "planner_status": validation_report.planner_status,
+        "planner_fallback_used": validation_report.planner_fallback_used,
+        "planner_fallback_reason": validation_report.planner_fallback_reason,
+        "candidate_ir_objects": validation_report.candidate_ir_objects,
+        "serialized_objects": validation_report.serialized_objects,
+        "final_objects": validation_report.final_objects,
+        "syntax_validation": validation_report.syntax_validation,
+        "semantic_validation": validation_report.semantic_validation,
+        "playability_validation": validation_report.playability_validation,
+        "repair_applied": validation_report.repair_applied,
+        "repair_loss": validation_report.repair_loss,
+        "low_quality_draft_saved": validation_report.low_quality_draft_saved,
+        "final_success": validation_report.final_success,
+        "report_consistency": validation_report.report_consistency,
         "removed_object_ratio": validation_report.removed_object_ratio,
         "removed_trigger_ratio": validation_report.removed_trigger_ratio,
         "drop_impact_score": validation_report.metrics.get("drop_impact_score", 0.0),
@@ -852,6 +916,8 @@ def _maybe_apply_ai_provider(
             raise
         metadata["ai_planning_error"] = getattr(exc, "code", "provider_setup_failed")
         metadata["deterministic_fallback_used"] = True
+        metadata["ai_fallback_used"] = True
+        metadata["ai_fallback_reason"] = metadata["ai_planning_error"]
         return AIPlanConversionResult(
             response=AILevelPlanResponse(provider="local", model="deterministic", fallback_used=True)
         ), metadata
@@ -913,6 +979,10 @@ def _maybe_apply_ai_provider(
             safe_mode=safe_mode,
             section_plans=section_plans,
         )
+        if provider_name == "ollama" and (conversion.object_plans or conversion.trigger_plans):
+            conversion.object_plans.clear()
+            conversion.trigger_plans.clear()
+            conversion.errors.append("ollama_object_plan_output_rejected")
         
         if conversion.valid:
             # Deterministic Expansion of AI-suggested plan.
@@ -970,7 +1040,9 @@ def _maybe_apply_ai_provider(
     if best_conversion is None:
         metadata["ai_planning_used"] = False
         metadata["deterministic_fallback_used"] = True
+        metadata["ai_fallback_used"] = True
         metadata["ai_planning_error"] = last_error_code or "ai_output_invalid"
+        metadata["ai_fallback_reason"] = metadata["ai_planning_error"]
         
         fallback_response = AILevelPlanResponse(provider="local", model="deterministic", fallback_used=True)
         fallback_res = AIPlanConversionResult(response=fallback_response)
@@ -1074,6 +1146,20 @@ def _build_ai_level_plan_request(
         output_requirements={
             "format": "JSON only",
             "raw_save_string_allowed": False,
+            "planner_contract": "strict_section_plan_v1",
+            "allowed_top_level_keys": ["level_plan", "sections"],
+            "forbidden_outputs": [
+                "raw .gmd save strings",
+                "object_plans",
+                "trigger_plans",
+                "group_id",
+                "group_ids",
+                "target_group",
+                "color_channel",
+                "color_channel_id",
+                "final_score",
+                "validation verdicts",
+            ],
             "object_budget": object_budget,
             "safe_mode": safe_mode,
             "quality_feedback_from_previous_candidates": str(config.get("quality_feedback_prompt", "") or ""),
@@ -1298,6 +1384,28 @@ def _apply_ai_metadata(
     validation_report.ai_cache_hits = int(ai_metadata.get("ai_cache_hits", 0))
     validation_report.ai_request_hashes = [str(item) for item in ai_metadata.get("ai_request_hashes", [])]
     validation_report.local_fallback_used = bool(ai_metadata.get("local_fallback_used", False))
+    validation_report.deterministic_fallback_used = bool(ai_metadata.get("deterministic_fallback_used", False))
+    validation_report.planner_fallback_used = (
+        validation_report.ai_fallback_used
+        or validation_report.local_fallback_used
+        or validation_report.deterministic_fallback_used
+        or bool(getattr(ai_conversion.response, "fallback_used", False))
+    )
+    validation_report.planner_fallback_reason = (
+        validation_report.ai_fallback_reason
+        or str(ai_metadata.get("ai_planning_error", ""))
+        or ("deterministic_fallback" if validation_report.planner_fallback_used else "")
+    )
+    if validation_report.planner_fallback_used:
+        validation_report.planner_status = "fallback"
+    elif validation_report.ai_used and validation_report.ai_provider == "ollama":
+        validation_report.planner_status = "ollama_used"
+    elif validation_report.ai_provider == "local_test_only":
+        validation_report.planner_status = "local_test_only"
+    elif validation_report.ai_provider in {"local", "deterministic"}:
+        validation_report.planner_status = "local_deterministic"
+    else:
+        validation_report.planner_status = "not_used"
     validation_report.ai_normalization_warnings = list(ai_metadata.get("ai_normalization_warnings", []))
     validation_report.pruned_trigger_property_count = int(ai_metadata.get("pruned_trigger_property_count", 0))
     validation_report.ignored_irrelevant_trigger_property_count = int(ai_metadata.get("ignored_irrelevant_trigger_property_count", 0))
@@ -1449,13 +1557,41 @@ def _finalize_quality_report(
 
     validation_report.plan_count_report.raw_ai_objects = validation_report.raw_ai_object_count
     validation_report.plan_count_report.raw_ai_triggers = validation_report.raw_ai_trigger_count
+    validation_report.plan_count_report.parsed_objects = pre_repair_snapshot.object_count
+    validation_report.plan_count_report.parsed_triggers = pre_repair_snapshot.trigger_count
+    validation_report.plan_count_report.normalized_objects = repaired_plan_snapshot.object_count
+    validation_report.plan_count_report.normalized_triggers = repaired_plan_snapshot.trigger_count
     validation_report.plan_count_report.repaired_objects = pre_repair_snapshot.object_count
     validation_report.plan_count_report.repaired_triggers = pre_repair_snapshot.trigger_count
+    validation_report.plan_count_report.rendered_objects = final_plan_snapshot.object_count
+    validation_report.plan_count_report.rendered_triggers = final_plan_snapshot.trigger_count
     validation_report.plan_count_report.final_encoded_objects = final_plan_snapshot.object_count
     validation_report.plan_count_report.final_encoded_triggers = final_plan_snapshot.trigger_count
     if validation_report.selected_candidate_id:
         validation_report.plan_count_report.selected_candidate_objects = final_plan_snapshot.object_count
         validation_report.plan_count_report.selected_candidate_triggers = final_plan_snapshot.trigger_count
+    validation_report.candidate_ir_objects = pre_repair_snapshot.object_count + pre_repair_snapshot.trigger_count
+    validation_report.serialized_objects = final_plan_snapshot.object_count + final_plan_snapshot.trigger_count
+    validation_report.final_objects = len(level_objects)
+    validation_report.syntax_validation = {
+        "passed": bool(validation_report.round_trip_valid),
+        "round_trip_valid": bool(validation_report.round_trip_valid),
+        "object_count": len(level_objects),
+    }
+    validation_report.semantic_validation = {
+        "passed": validation_report.valid and not validation_report.editor_safety_report.get("fatal_errors", []),
+        "missing_target_group": validation_report.unresolved_missing_target_group_count,
+        "missing_color_channel": int(validation_report.metrics.get("missing_color_channel", 0)),
+        "invalid_trigger_target": validation_report.orphan_trigger_count + validation_report.invalid_group_count,
+    }
+    validation_report.playability_validation = {
+        "passed": len(validation_report.playability_warnings) == 0,
+        "warning_count": len(validation_report.playability_warnings),
+        "score": validation_report.score_breakdown.get("playability", 0.0),
+    }
+    repair_total_fixed = int(getattr(repair_report, "total_fixed", 0) or 0)
+    validation_report.repair_applied = bool(repair_total_fixed or validation_report.removed_object_ratio or validation_report.removed_trigger_ratio)
+    validation_report.repair_loss = max(validation_report.removed_object_ratio, validation_report.removed_trigger_ratio)
 
 
 def _snapshot_from_dict(payload: dict[str, Any]) -> PlanSnapshot:
@@ -2380,4 +2516,3 @@ def _ensure_num_sections_for_report(result_obj):
         result_obj["num_sections"] = count
 
     return result_obj
-

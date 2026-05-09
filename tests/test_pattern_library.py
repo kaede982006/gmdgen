@@ -3,6 +3,7 @@
 """Pattern library coverage and shape."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -10,20 +11,52 @@ from pathlib import Path
 from gmdgen.patterns.builder import (
     PATTERNS_INDEX_PATH,
     PATTERNS_PER_CELL,
+    PATTERNS_DIR,
     build_index,
     load_index,
     pick_pattern,
 )
 from gmdgen.types import VALID_DIFFICULTIES, VALID_GAME_MODES
+from gmdgen.validation.pattern_schema import (
+    validate_pattern_library,
+    validate_patterns_index_payload,
+)
+
+
+def _pattern_fixture_hashes() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in sorted(PATTERNS_DIR.rglob("*.json")):
+        result[str(path.relative_to(PATTERNS_DIR))] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
 
 
 def test_build_index_writes_all_cells(tmp_path: Path) -> None:
+    before = _pattern_fixture_hashes()
     out = tmp_path / "patterns_index.json"
     idx = build_index(out)
     assert out.exists()
     cells = idx["cells"]
     expected = {f"{m}/{d}" for m in VALID_GAME_MODES for d in VALID_DIFFICULTIES}
     assert set(cells.keys()) == expected, "every (mode, difficulty) cell must be represented"
+    assert _pattern_fixture_hashes() == before
+
+
+def test_pattern_library_is_read_only_by_default(tmp_path: Path) -> None:
+    before = _pattern_fixture_hashes()
+
+    build_index(tmp_path / "patterns_index.json")
+    validate_pattern_library(PATTERNS_DIR)
+
+    assert _pattern_fixture_hashes() == before
+
+
+def test_pattern_regeneration_requires_explicit_opt_in(monkeypatch) -> None:
+    monkeypatch.delenv("GMDGEN_REGENERATE_PATTERN_FIXTURES", raising=False)
+    before = _pattern_fixture_hashes()
+
+    build_index()
+
+    assert _pattern_fixture_hashes() == before
 
 
 def test_each_cell_has_minimum_patterns() -> None:
@@ -82,3 +115,23 @@ def test_index_file_is_valid_json() -> None:
     text = PATTERNS_INDEX_PATH.read_text(encoding="utf-8")
     payload = json.loads(text)
     assert "cells" in payload and "patterns" in payload
+
+
+def test_patterns_index_uses_index_schema() -> None:
+    payload = json.loads(PATTERNS_INDEX_PATH.read_text(encoding="utf-8"))
+
+    errors, warnings = validate_patterns_index_payload(payload, path=PATTERNS_INDEX_PATH)
+
+    assert errors == []
+    assert warnings == []
+
+
+def test_all_pattern_objects_validate_without_rewrite() -> None:
+    before = _pattern_fixture_hashes()
+
+    report = validate_pattern_library(PATTERNS_DIR).to_dict()
+
+    assert report["passed"] is True
+    assert report["index_files"] == 1
+    assert report["valid_patterns"] >= 100
+    assert _pattern_fixture_hashes() == before

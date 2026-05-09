@@ -52,6 +52,43 @@ AI_GENERATOR_NOTICE = "This generator creates Geometry Dash level plans using lo
 AI_FAILURE_NOTICE = "Local generation is disabled for real level generation."
 LOCAL_TEST_NOTICE = "Low Cost mode limits API calls and uses cache."
 
+
+def summarize_generation_status(result: dict[str, Any]) -> dict[str, str]:
+    report = result.get("validation_report", {})
+    if not isinstance(report, dict):
+        report = {}
+    planner_fallback = bool(result.get("planner_fallback_used", report.get("planner_fallback_used", False)))
+    low_quality = bool(result.get("low_quality_draft_saved", report.get("low_quality_draft_saved", False)))
+    quality_passed = bool(result.get("quality_gate_passed", report.get("quality_gate_passed", True)))
+    final_success = bool(result.get("final_success", report.get("final_success", False)))
+    if final_success and quality_passed and not planner_fallback and not low_quality:
+        return {
+            "state": "final_success",
+            "status": "Generation completed",
+            "title": "Generation completed",
+            "summary": "Final output passed syntax, semantic, playability, and report checks.",
+        }
+    if planner_fallback:
+        return {
+            "state": "fallback_draft",
+            "status": "Fallback draft saved",
+            "title": "Fallback Draft Saved",
+            "summary": "Ollama planner failed or was invalid; a deterministic fallback draft was saved for inspection.",
+        }
+    if low_quality or not quality_passed:
+        return {
+            "state": "low_quality_draft",
+            "status": "Validation failed (draft saved)",
+            "title": "Low Quality Draft Saved",
+            "summary": "The generated draft was saved, but it did not pass the final quality gate.",
+        }
+    return {
+        "state": "incomplete",
+        "status": "Generation produced non-final output",
+        "title": "Generation Not Final",
+        "summary": "The run produced output, but the report did not mark it as final success.",
+    }
+
 @dataclass(slots=True)
 class GuiGenerationConfig:
     audio_file: str
@@ -1481,8 +1518,25 @@ def launch_gui() -> int:
             if getattr(self, "open_output_btn", None) is not None:
                 self.open_output_btn.configure(state="normal")
                 
-            if not result.get("quality_gate_passed", True):
-                self.status_var.set("Generation completed (Low Quality Draft)")
+            status_summary = summarize_generation_status(result)
+            if status_summary["state"] == "fallback_draft":
+                self.status_var.set(status_summary["status"])
+                fallback_reason = result.get("planner_fallback_reason") or result.get("ai_fallback_reason") or "planner_fallback"
+                validation = result.get("syntax_validation", result.get("validation_report", {}).get("syntax_validation", {}))
+                report_path = result.get("report_path", "")
+                self._append_log(f"[generate:fallback] {fallback_reason}")
+                self.messagebox.showwarning(
+                    status_summary["title"],
+                    (
+                        f"{status_summary['summary']}\n\n"
+                        f"Reason: {fallback_reason}\n"
+                        f"Validation passed: {validation.get('passed', 'unknown') if isinstance(validation, dict) else 'unknown'}\n"
+                        f"Output:\n{result.get('output_path', '')}\n"
+                        f"Report:\n{report_path}"
+                    ),
+                )
+            elif status_summary["state"] == "low_quality_draft":
+                self.status_var.set(status_summary["status"])
                 fail_msg = result.get("quality_gate_failure", "Quality gate failed.")
                 self._append_log(f"[generate:warning] {fail_msg}")
                 already_extreme = config.quality_mode.lower() in {"extreme ml", "extreme_ml", "extreme"}
@@ -1499,18 +1553,28 @@ def launch_gui() -> int:
                     diag_lines.append(f"  Stopped reason: {stopped}")
                 diag_text = "\n".join(diag_lines)
                 self.messagebox.showwarning(
-                    "Low Quality Draft Saved",
+                    status_summary["title"],
                     f"The generated level did not pass the Quality Gate.\n\n{fail_msg}\n\nDiagnostics:\n{diag_text}\n\nIt has been saved as a draft. {suggestion}"
                 )
             else:
-                self.status_var.set("Generation completed")
+                self.status_var.set(status_summary["status"])
                 
             output_path = save_res.get("resolved_output_path", "") if save_res else result.get("output_path", "")
             score = result.get("final_score", result.get("score", {}).get("total", 0.0))
+            report_for_log = result.get("validation_report", {})
+            if not isinstance(report_for_log, dict):
+                report_for_log = {}
             self._append_log(f"[generate] done: output={output_path}")
             self._append_log(f"[generate] saved: {output_path}")
             self._append_log(f"[generate] score={score}")
             self._append_log(f"[generate] ai_provider={result.get('ai_provider')} valid={result.get('valid')}")
+            self._append_log(
+                "[generate:status] "
+                f"planner={result.get('planner_status', report_for_log.get('planner_status'))} "
+                f"fallback={result.get('planner_fallback_used', report_for_log.get('planner_fallback_used'))} "
+                f"quality_gate={result.get('quality_gate_passed')} "
+                f"final_success={result.get('final_success')}"
+            )
             removed_params = result.get("ollama_removed_unsupported_params", [])
             if removed_params:
                 self._append_log(
@@ -1549,7 +1613,8 @@ def launch_gui() -> int:
                         os.startfile(output_dir)  # type: ignore[attr-defined]
                 except Exception as exc:  # noqa: BLE001
                     self._append_log(f"[generate:warning] failed to open output folder: {exc}")
-            self.messagebox.showinfo("Generation completed", f"Output:\n{output_path}")
+            if status_summary["state"] == "final_success":
+                self.messagebox.showinfo(status_summary["title"], f"Output:\n{output_path}")
 
         @safe_gui_callback
         def _save_report(self) -> None:

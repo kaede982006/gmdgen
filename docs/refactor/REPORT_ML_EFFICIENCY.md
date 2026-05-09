@@ -9,7 +9,7 @@ The numbers below are characterizations of the **current** code path._
 
 | Call site | Purpose | Frequency | Avg input size | Avg output size | Result usage |
 |---|---|---|---|---|---|
-| `OllamaProvider.generate_level_plan` (`audio_conditioned.py:891`) | Structured JSON plan request | 1× per candidate | structured prompt + audio summary + section plans | `AILevelPlanResponse` (JSON) | Materializer expansion + scoring |
+| `OllamaProvider.generate_level_plan` | Strict symbolic section-plan request | 1× per candidate | structured prompt + audio summary + section plans | `level_plan` + `sections` JSON | Local IR/materializer expansion + validation |
 | `_extract_json_object` (`ollama_provider.py`) | JSON parse with repair retry | up to 2× per AI call | response body | dict | Plan conversion |
 
 The call graph is shallow by design: planning is **one** model call per

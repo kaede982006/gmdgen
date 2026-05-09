@@ -7,9 +7,9 @@ gmdgen is an Ollama-only local AI Geometry Dash GMD generator/editor.
 No external API key is required.
 Gemini and OpenAI are legacy, retired, non-runtime providers in this release.
 
-Ollama generates structured JSON plans, not raw .gmd save strings.
-The internal renderer and encoder create the final .gmd file.
-QualityGate and SaveResult are mandatory.
+Ollama produces strict symbolic section-plan JSON, not raw .gmd save strings, concrete ids, scores, or validation verdicts.
+The local IR pipeline, serializer, validators, repairer, and report consistency gate own final .gmd acceptance.
+QualityGate, validator results, repair metrics, and GenerationReport consistency are mandatory.
 
 Recommended local setup:
 

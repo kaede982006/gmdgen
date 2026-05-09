@@ -12,6 +12,7 @@ a defensible default so the library is never empty.
 from __future__ import annotations
 
 import json
+import os
 import random
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -38,6 +39,7 @@ HIGH_Y = 255
 
 PATTERNS_PER_CELL = 6
 BEAT_UNIT = 30.0  # x units per beat at speed=1
+REGENERATE_PATTERN_FIXTURES_ENV = "GMDGEN_REGENERATE_PATTERN_FIXTURES"
 
 
 @dataclass(slots=True)
@@ -140,44 +142,66 @@ def _synthesize(mode: str, difficulty: str, idx: int) -> Pattern:
     )
 
 
-def build_index(out_path: Path | None = None) -> dict[str, Any]:
-    """Generate all (mode, difficulty) patterns and write the index file.
+def build_index(
+    out_path: Path | None = None,
+    *,
+    patterns_dir: Path | None = None,
+    write_pattern_files: bool | None = None,
+) -> dict[str, Any]:
+    """Generate all (mode, difficulty) patterns and optionally write fixtures.
 
-    Returns the index dict; also writes JSON files (one per pattern) and a
-    consolidated patterns_index.json that test/runtime code can mmap-read.
+    Tests should call this with a temporary ``out_path`` and must not rewrite
+    package fixtures. Source fixture regeneration is opt-in via
+    ``GMDGEN_REGENERATE_PATTERN_FIXTURES=1`` or an explicit
+    ``write_pattern_files=True`` maintenance call.
     """
-    PATTERNS_DIR.mkdir(parents=True, exist_ok=True)
+    target = out_path or PATTERNS_INDEX_PATH
+    target_dir = patterns_dir or (PATTERNS_DIR if target == PATTERNS_INDEX_PATH else target.parent)
+    regenerate_enabled = _fixture_regeneration_enabled()
+    should_write_pattern_files = regenerate_enabled if write_pattern_files is None else bool(write_pattern_files)
+
+    if should_write_pattern_files:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    elif target.parent != PATTERNS_DIR or out_path is not None:
+        target.parent.mkdir(parents=True, exist_ok=True)
+
     index: dict[str, Any] = {"version": 1, "cells": {}, "patterns": {}}
 
     for mode in VALID_GAME_MODES:
         for difficulty in VALID_DIFFICULTIES:
-            cell_dir = PATTERNS_DIR / mode / difficulty
-            cell_dir.mkdir(parents=True, exist_ok=True)
+            cell_dir = target_dir / mode / difficulty
+            if should_write_pattern_files:
+                cell_dir.mkdir(parents=True, exist_ok=True)
             cell_ids: list[str] = []
             for i in range(PATTERNS_PER_CELL):
                 pat = _synthesize(mode, difficulty, i)
-                fp = cell_dir / f"{pat.id}.json"
-                fp.write_text(
-                    json.dumps(pat.to_dict(), ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                if should_write_pattern_files:
+                    fp = cell_dir / f"{pat.id}.json"
+                    fp.write_text(
+                        json.dumps(pat.to_dict(), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
                 cell_ids.append(pat.id)
                 index["patterns"][pat.id] = pat.to_dict()
             index["cells"][f"{mode}/{difficulty}"] = cell_ids
 
-    target = out_path or PATTERNS_INDEX_PATH
-    target.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    if out_path is not None or regenerate_enabled:
+        target.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
     return index
 
 
 def load_index(path: Path | None = None) -> dict[str, Any]:
     p = path or PATTERNS_INDEX_PATH
     if not p.exists():
-        return build_index(p)
+        return build_index(p if _fixture_regeneration_enabled() or path is not None else None)
     try:
         return json.loads(p.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return build_index(p)
+        return build_index(p if _fixture_regeneration_enabled() or path is not None else None)
+
+
+def _fixture_regeneration_enabled() -> bool:
+    return os.environ.get(REGENERATE_PATTERN_FIXTURES_ENV, "").strip() in {"1", "true", "yes"}
 
 
 def pick_pattern(

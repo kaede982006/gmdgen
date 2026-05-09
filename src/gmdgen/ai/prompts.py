@@ -193,10 +193,42 @@ def summarize_reference_style_for_model(style_profile: dict[str, Any], *, max_id
 
 
 def summarize_json_schema_for_model() -> dict[str, Any]:
-    schema = AI_LEVEL_PLAN_JSON_SCHEMA["schema"]
     return {
-        "required": schema["required"],
-        "top_level_keys": sorted(schema["properties"].keys()),
+        "required": ["level_plan", "sections"],
+        "top_level_keys": ["level_plan", "sections"],
+        "level_plan_required": [
+            "level_name",
+            "difficulty",
+            "target_duration",
+            "object_budget",
+            "style",
+            "sync_intensity",
+        ],
+        "section_required": [
+            "section_id",
+            "time_start",
+            "time_end",
+            "game_mode",
+            "speed",
+            "density",
+            "primary_pattern",
+            "allowed_object_families",
+            "forbidden_features",
+            "trigger_budget",
+            "group_symbols",
+            "design_notes",
+        ],
+        "forbidden_keys": [
+            "object_plans",
+            "trigger_plans",
+            "group_id",
+            "group_ids",
+            "target_group",
+            "color_channel",
+            "color_channel_id",
+            "final_score",
+            "validation_passed",
+        ],
         "allowed_object_roles": list(allowed_object_roles()),
         "raw_save_string_allowed": False,
     }

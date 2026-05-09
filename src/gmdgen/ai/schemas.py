@@ -369,6 +369,14 @@ class AILevelPlanRequest:
 
 @dataclass(slots=True)
 class AILevelPlanResponse:
+    """Deprecated compatibility response for legacy internal tests/adapters.
+
+    Production Ollama output must use the strict symbolic planner contract in
+    ``gmdgen.ai.planner``. Direct ``object_plans`` and ``trigger_plans`` here
+    are not a source of truth for final generation and are blocked at the
+    Ollama provider boundary.
+    """
+
     sections: list[dict[str, Any]] = field(default_factory=list)
     gameplay_events: list[dict[str, Any]] = field(default_factory=list)
     object_plans: list[dict[str, Any]] = field(default_factory=list)
@@ -526,6 +534,13 @@ def convert_ai_response_to_plans(
     safe_mode: bool,
     section_plans: list[SectionPlan] | None = None,
 ) -> AIPlanConversionResult:
+    """Convert a deprecated compatibility response into local plan objects.
+
+    This remains for migration tests and non-Ollama internal adapters only.
+    Production Ollama responses are parsed as symbolic LevelPlan/SectionPlan
+    JSON and must not enter this function with object-level model output.
+    """
+
     normalization_report = _normalize_response_in_place(
         response,
         safe_mode=safe_mode,
