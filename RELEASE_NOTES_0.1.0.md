@@ -14,8 +14,8 @@
 - **Self-supervised pre-training on .gmd**: ``python -m gmdgen.ml.train``
   reads the ``dataset/`` corpus, slices each level into overlapping windows,
   and learns next-object cross-entropy with auxiliary ``dx`` / ``y`` heads.
-  600-step CPU run reduces validation loss from 5.58 → 3.97 and held-out
-  perplexity from 80 → 53.
+  The refreshed 600-step CPU run reports final validation perplexity 36.15 and
+  level-wise held-out perplexity 52.36.
 - **Factorized tokenization**: each GD object is encoded as 7 sub-tokens
   (id / cls / dx / y / mode / speed / section). Each factor has its own
   learnable embedding; inputs are summed (Goodfellow Ch.15 — disentangling
