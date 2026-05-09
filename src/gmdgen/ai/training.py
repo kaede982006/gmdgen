@@ -96,9 +96,9 @@ def run_auto_training(config: AutoTrainingConfig) -> tuple[AutoTrainingResult, C
 
     try:
         base_index = build_context_index(
-            context_dirs=config.context_dirs,
-            reference_level_dirs=config.reference_level_dirs,
-            schema_paths=config.schema_paths,
+            context_dirs=config.context_dirs,  # type: ignore
+            reference_level_dirs=config.reference_level_dirs,  # type: ignore
+            schema_paths=config.schema_paths,  # type: ignore
             max_context_chars=config.max_context_chars,
         )
         dataset_index = _load_or_build_dataset_index(config, dataset_dir)
@@ -199,9 +199,9 @@ def invalidate_cache_if_sources_changed(config: AutoTrainingConfig) -> bool:
     dataset_dir = resolve_dataset_dir(config.dataset_dir)
     dataset_index = _load_or_build_dataset_index(config, dataset_dir)
     fresh_index = build_context_index(
-        context_dirs=config.context_dirs,
-        reference_level_dirs=config.reference_level_dirs,
-        schema_paths=config.schema_paths,
+        context_dirs=config.context_dirs,  # type: ignore
+        reference_level_dirs=config.reference_level_dirs,  # type: ignore
+        schema_paths=config.schema_paths,  # type: ignore
         max_context_chars=config.max_context_chars,
     )
     fresh_index = _merge_dataset_index(fresh_index, dataset_index)

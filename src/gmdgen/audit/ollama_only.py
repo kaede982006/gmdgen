@@ -22,6 +22,8 @@ class OllamaOnlyAuditResult:
     checks: list[OllamaOnlyAuditCheck] = field(default_factory=list)
     ollama_provider_available: bool = True
     default_provider: str = "ollama"
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +41,8 @@ class OllamaOnlyAuditResult:
             ],
             "ollama_provider_available": self.ollama_provider_available,
             "default_provider": self.default_provider,
+            "errors": self.errors,
+            "warnings": self.warnings,
         }
 
 def run_ollama_only_audit(config: dict[str, Any], app_state: dict[str, Any] | None = None) -> OllamaOnlyAuditResult:

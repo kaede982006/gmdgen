@@ -383,8 +383,8 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
             f"converted={playability_repair_report.converted_gameplay_to_decoration} "
             f"simplified={playability_repair_report.simplified_dense_orb_chain}"
         )
-    validation_report.time_x_avg_error = float(time_x_report["average_error"])
-    validation_report.time_x_max_error = float(time_x_report["max_error"])
+    validation_report.time_x_avg_error = float(time_x_report["average_error"])  # type: ignore
+    validation_report.time_x_max_error = float(time_x_report["max_error"])  # type: ignore
     validation_report.audio_backend = features.backend
     validation_report.audio_file = audio_file_name
     validation_report.audio_file_name = audio_file_name
@@ -394,8 +394,8 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     validation_report.section_count = len(section_plans)
     validation_report.speed_object_count = len(speed_objects)
     validation_report.generated_trigger_count = len(trigger_plans)
-    validation_report.metrics["time_x_invalid_count"] = int(time_x_report["invalid_count"])
-    validation_report.metrics["time_x_checked_count"] = int(time_x_report["checked_count"])
+    validation_report.metrics["time_x_invalid_count"] = int(time_x_report["invalid_count"])  # type: ignore
+    validation_report.metrics["time_x_checked_count"] = int(time_x_report["checked_count"])  # type: ignore
     validation_report.geode_available = bool(geode_parity_report.available)
     validation_report.geode_version = str(geode_bridge.get_version() or "")
     validation_report.geode_time_x_checked = bool(geode_parity_report.checked)
@@ -422,9 +422,9 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     validation_report.playability_warnings.extend(
         warning.message
         for warning in validate_playability_v1(
-            object_plans=object_plans,
+            object_plans=object_plans,  # type: ignore
             section_plans=section_plans,
-            speed_objects=speed_objects,
+            speed_objects=speed_objects,  # type: ignore
             difficulty=difficulty,
         )
     )
@@ -500,7 +500,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     validation_report.metrics["editor_safety_score"] = editor_safety_report.to_dict()["score"]
     if not round_trip["valid"]:
         validation_report.editor_validity_warnings.extend(
-            str(issue) for issue in round_trip["issues"]
+            str(issue) for issue in round_trip["issues"]  # type: ignore
         )
     if editor_safety_report.fatal_errors:
         for issue in editor_safety_report.fatal_errors:
@@ -799,7 +799,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         },
         "section_plan": [_section_plan_to_dict(plan) for plan in section_plans[:32]],
         "speed_plan": [asdict(speed_object) | {"speed_state": speed_object.speed_state.value} for speed_object in speed_objects],
-        "gameplay_event_preview": [asdict(event) for event in []], # gameplay_events not available anymore
+        "gameplay_event_preview": [], # gameplay_events not available anymore
         "audio_event_preview": [asdict(event) for event in audio_events[:32]],
         "report_path": str(report_path),
         "timing": validation_report.metrics,
@@ -829,9 +829,9 @@ def _maybe_apply_ai_provider(
     safe_mode: bool,
     start_speed: str,
     song_offset: float,
-    motif_library: list[dict[str, Any]] = None,
-    mat_config: MaterializationConfig = None,
-    speed_objects: list[Any] = None,
+    motif_library: list[dict[str, Any]] = None,  # type: ignore
+    mat_config: MaterializationConfig = None,  # type: ignore
+    speed_objects: list[Any] = None,  # type: ignore
     song_offset_val: float = 0.0,
     start_speed_val: SpeedState = SpeedState.NORMAL,
 ) -> tuple[AIPlanConversionResult, dict[str, Any]]:

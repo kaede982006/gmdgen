@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from gmdgen.data.preprocess import extract_level_header, split_level_objects
 from gmdgen.features.tokenizer import (
@@ -315,6 +316,8 @@ def _plan_x(plan: ObjectPlan | dict) -> float | None:
     else:
         value = getattr(plan, "x", None)
     try:
+        if value is None:
+            return None
         return float(value)
     except (TypeError, ValueError):
         return None
@@ -574,7 +577,7 @@ def round_trip_validate(
     *,
     safe_mode: bool = False,
     max_group_id: int | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     objects, issues = parse_save_string_safe(level_string)
     if issues:
         return {

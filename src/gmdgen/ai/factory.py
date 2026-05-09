@@ -7,7 +7,7 @@ from typing import Any
 try:
     from gmdgen.ai.cache import AIRequestBudget
 except Exception:
-    AIRequestBudget = None
+    AIRequestBudget = None  # type: ignore
 
 from gmdgen.ai.ollama_provider import OllamaOnlyConfigurationError, OllamaProvider
 

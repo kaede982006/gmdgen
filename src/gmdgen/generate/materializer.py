@@ -94,7 +94,7 @@ class SectionObjectMaterializer:
         motif_library: list[dict[str, Any]] | None = None,
         style_profile: dict[str, Any] | None = None,
         object_budget: int = 2000,
-        speed_objects: list[Any] = None,
+        speed_objects: list[Any] | None = None,
         start_speed: SpeedState = SpeedState.NORMAL,
         song_offset: float = 0.0,
         section_index: int = 0,
@@ -120,7 +120,7 @@ class SectionObjectMaterializer:
                 section,
                 audio_features.beat_times,
                 section_rng,
-                speed_objects=speed_objects,
+                speed_objects=speed_objects,  # type: ignore
                 start_speed=start_speed,
                 song_offset=song_offset,
             )
@@ -142,7 +142,7 @@ class SectionObjectMaterializer:
                 section,
                 audio_features.onset_times,
                 section_rng,
-                speed_objects=speed_objects,
+                speed_objects=speed_objects,  # type: ignore
                 start_speed=start_speed,
                 song_offset=song_offset,
             )
@@ -227,7 +227,7 @@ class SectionObjectMaterializer:
         rng: random.Random,
         remaining_budget: int
     ) -> list[ObjectPlan]:
-        objects = []
+        objects = []  # type: ignore
         if remaining_budget <= 0:
             return []
             
@@ -385,7 +385,7 @@ def materialize_level_plans(
     motif_library: list[dict[str, Any]] | None = None,
     style_profile: dict[str, Any] | None = None,
     total_object_budget: int = 10000,
-    speed_objects: list[Any] = None,
+    speed_objects: list[Any] = None,  # type: ignore
     start_speed: SpeedState = SpeedState.NORMAL,
     song_offset: float = 0.0,
 ) -> list[ObjectPlan]:

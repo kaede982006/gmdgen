@@ -209,13 +209,22 @@ def _extract_motif_summaries(objects: list[str], *, window: int = 8) -> list[dic
         chunk = objects[start:start + window]
         if not chunk:
             continue
-        ids = [extract_object_id(obj) for obj in chunk if extract_object_id(obj)]
-        xs = [extract_object_number(obj, "2") for obj in chunk]
-        xs = [float(x) for x in xs if x is not None]
+        ids: list[str] = []
+        for obj in chunk:
+            oid = extract_object_id(obj)
+            if oid:
+                ids.append(oid)
+        
+        xs: list[float] = []
+        for obj in chunk:
+            x_val = extract_object_number(obj, "2")
+            if x_val is not None:
+                xs.append(float(x_val))
+
         if not ids or not xs:
             continue
         roles = [_role_hint(object_id, classify(object_id).value) for object_id in ids]
-        length_x = max(xs) - min(xs) if len(xs) > 1 else 0.0
+        length_x = float(max(xs)) - float(min(xs)) if len(xs) > 1 else 0.0
         motifs.append(
             {
                 "motif_id": f"motif_{len(motifs)}",

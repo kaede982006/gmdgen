@@ -75,9 +75,9 @@ def validate_single_record(
     return RecordValidationResult(
         level_name=level_name,
         parse_ok=True,
-        object_count=structural.get("object_count", 0),
+        object_count=structural.get("object_count", 0),  # type: ignore
         x_monotone_ratio=structural.get("x_monotone_ratio", 1.0),
-        section_count=structural.get("section_count", 1),
+        section_count=structural.get("section_count", 1),  # type: ignore
         density_mean=structural.get("density_mean", 0.0),
         density_std=structural.get("density_std", 0.0),
         trigger_integrity=score.trigger,

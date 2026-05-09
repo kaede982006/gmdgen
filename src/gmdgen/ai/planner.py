@@ -109,14 +109,14 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
     level_payload = data.get("level_plan")
     sections_payload = data.get("sections")
     
-    if not isinstance(level_payload, dict):
-        errors.append("level_plan_required")
-    if not isinstance(sections_payload, list):
-        errors.append("sections_required")
-    
-    if errors:
+    if not isinstance(level_payload, dict) or not isinstance(sections_payload, list):
+        if not isinstance(level_payload, dict):
+            errors.append("level_plan_required")
+        if not isinstance(sections_payload, list):
+            errors.append("sections_required")
         return PlannerParseResult(errors=errors, raw_payload=raw_payload, json_payload=data)
 
+    # Now level_payload is dict and sections_payload is list
     level_errors = _validate_level_plan_payload(level_payload)
     section_errors: list[str] = []
     sections: list[SectionPlan] = []
@@ -139,12 +139,12 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
 
     return PlannerParseResult(
         plan=LevelPlan(
-            level_name=str(level_payload["level_name"]),
-            difficulty=str(level_payload["difficulty"]).lower(),
-            target_duration=float(level_payload["target_duration"]),
-            object_budget=int(level_payload["object_budget"]),
-            style=str(level_payload["style"]),
-            sync_intensity=str(level_payload["sync_intensity"]).lower(),
+            level_name=str(level_payload.get("level_name", "unnamed")),
+            difficulty=str(level_payload.get("difficulty", "normal")).lower(),
+            target_duration=float(level_payload.get("target_duration", 30.0)),
+            object_budget=int(level_payload.get("object_budget", 1000)),
+            style=str(level_payload.get("style", "modern")),
+            sync_intensity=str(level_payload.get("sync_intensity", "medium")).lower(),
             sections=sections,
         ),
         raw_payload=raw_payload,
@@ -228,17 +228,27 @@ def _validate_level_plan_payload(payload: dict[str, Any]) -> list[str]:
         errors.append("level_plan_unknown_difficulty")
     if str(payload.get("sync_intensity", "")).lower() not in SYNC_INTENSITIES:
         errors.append("level_plan_unknown_sync_intensity")
-    try:
-        target_duration = float(payload.get("target_duration"))
-        if target_duration <= 0 or target_duration > 600:
-            errors.append("level_plan_target_duration_out_of_range")
-    except (TypeError, ValueError):
+    
+    td_raw = payload.get("target_duration")
+    if td_raw is not None:
+        try:
+            target_duration = float(td_raw)
+            if target_duration <= 0 or target_duration > 600:
+                errors.append("level_plan_target_duration_out_of_range")
+        except (TypeError, ValueError):
+            errors.append("level_plan_target_duration_invalid")
+    else:
         errors.append("level_plan_target_duration_invalid")
-    try:
-        object_budget = int(payload.get("object_budget"))
-        if object_budget <= 0 or object_budget > 40000:
-            errors.append("level_plan_object_budget_out_of_range")
-    except (TypeError, ValueError):
+
+    ob_raw = payload.get("object_budget")
+    if ob_raw is not None:
+        try:
+            object_budget = int(ob_raw)
+            if object_budget <= 0 or object_budget > 40000:
+                errors.append("level_plan_object_budget_out_of_range")
+        except (TypeError, ValueError):
+            errors.append("level_plan_object_budget_invalid")
+    else:
         errors.append("level_plan_object_budget_invalid")
     return errors
 
@@ -280,29 +290,48 @@ def _parse_section_payload(payload: dict[str, Any], index: int) -> tuple[Section
         errors.append(f"{prefix}:unknown_game_mode")
     if speed not in SPEEDS:
         errors.append(f"{prefix}:unknown_speed")
-    try:
-        time_start = float(payload.get("time_start"))
-        time_end = float(payload.get("time_end"))
-        if time_start < 0 or time_end <= time_start:
+    
+    ts_raw = payload.get("time_start")
+    te_raw = payload.get("time_end")
+    if ts_raw is not None and te_raw is not None:
+        try:
+            time_start = float(ts_raw)
+            time_end = float(te_raw)
+            if time_start < 0 or time_end <= time_start:
+                errors.append(f"{prefix}:time_range_invalid")
+        except (TypeError, ValueError):
+            time_start = 0.0
+            time_end = 0.0
             errors.append(f"{prefix}:time_range_invalid")
-    except (TypeError, ValueError):
+    else:
         time_start = 0.0
         time_end = 0.0
         errors.append(f"{prefix}:time_range_invalid")
-    try:
-        density = float(payload.get("density"))
-        if density < 0.0 or density > 1.0:
-            errors.append(f"{prefix}:density_out_of_range")
-    except (TypeError, ValueError):
+
+    d_raw = payload.get("density")
+    if d_raw is not None:
+        try:
+            density = float(d_raw)
+            if density < 0.0 or density > 1.0:
+                errors.append(f"{prefix}:density_out_of_range")
+        except (TypeError, ValueError):
+            density = 0.0
+            errors.append(f"{prefix}:density_invalid")
+    else:
         density = 0.0
         errors.append(f"{prefix}:density_invalid")
-    try:
-        trigger_budget = int(payload.get("trigger_budget"))
-        if trigger_budget < 0 or trigger_budget > 128:
-            errors.append(f"{prefix}:trigger_budget_out_of_range")
-    except (TypeError, ValueError):
+
+    tb_raw = payload.get("trigger_budget")
+    if tb_raw is not None:
+        try:
+            trigger_budget = int(tb_raw)
+            if trigger_budget < 0 or trigger_budget > 128:
+                errors.append(f"{prefix}:trigger_budget_out_of_range")
+        except (TypeError, ValueError):
+            trigger_budget = 0
+            errors.append(f"{prefix}:trigger_budget_invalid")
+    else:
         trigger_budget = 0
-        errors.append(f"{prefix}:trigger_budget_invalid")
 
     allowed = payload.get("allowed_object_families")
     forbidden = payload.get("forbidden_features")
@@ -330,11 +359,11 @@ def _parse_section_payload(payload: dict[str, Any], index: int) -> tuple[Section
             speed=speed,
             density=density,
             primary_pattern=str(payload["primary_pattern"]),
-            allowed_object_families=[str(item) for item in allowed if item],
-            forbidden_features=[str(item) for item in forbidden if item],
+            allowed_object_families=[str(item) for item in (allowed or []) if item],
+            forbidden_features=[str(item) for item in (forbidden or []) if item],
             trigger_budget=trigger_budget,
-            group_symbols=[GroupSymbol(str(item)) for item in groups if item],
-            color_symbols=[ColorSymbol(str(item)) for item in colors or [] if item],
+            group_symbols=[GroupSymbol(str(item)) for item in (groups or []) if item],
+            color_symbols=[ColorSymbol(str(item)) for item in (colors or []) if item],
             design_notes=str(payload["design_notes"]),
         ),
         [],

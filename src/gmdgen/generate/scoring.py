@@ -756,7 +756,7 @@ def _energy_density_score(objects: list[str], sections: list[Any]) -> float:
     x_values = [x for x in x_values if x is not None]
     if not x_values:
         return 0.0
-    total_width = max(x_values) - min(x_values)
+    total_width = max(x_values) - min(x_values)  # type: ignore
     if total_width <= 0:
         return 0.5
 
@@ -767,7 +767,7 @@ def _energy_density_score(objects: list[str], sections: list[Any]) -> float:
         return 1.0
     expected_rank = sorted(range(len(energies)), key=lambda idx: energies[idx])
     # Approximate generated density by object order split into equal bins.
-    sorted_x = sorted(x_values)
+    sorted_x = sorted(x_values)  # type: ignore
     bin_size = max(1, len(sorted_x) // len(energies))
     densities = []
     for idx in range(len(energies)):
@@ -775,7 +775,7 @@ def _energy_density_score(objects: list[str], sections: list[Any]) -> float:
         if len(chunk) < 2:
             densities.append(0.0)
         else:
-            densities.append(len(chunk) / max(1.0, chunk[-1] - chunk[0]))
+            densities.append(len(chunk) / max(1.0, chunk[-1] - chunk[0]))  # type: ignore
     density_rank = sorted(range(len(densities)), key=lambda idx: densities[idx])
     matches = sum(1 for a, b in zip(expected_rank, density_rank) if a == b)
     return matches / len(energies)

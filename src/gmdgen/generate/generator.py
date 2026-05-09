@@ -1017,9 +1017,9 @@ def generate_from_config(config: dict[str, Any]) -> dict[str, Any]:
             for object_id, values in raw_object_prototypes.items():
                 if not isinstance(values, list):
                     continue
-                normalized = [str(value) for value in values if isinstance(value, str)]
-                if normalized:
-                    object_prototypes[str(object_id)] = normalized
+                normalized_prototypes = [str(value) for value in values if isinstance(value, (str, int, float))]
+                if normalized_prototypes:
+                    object_prototypes[str(object_id)] = normalized_prototypes
 
         raw_object_y_samples = generation_assets.get("object_y_samples", {})
         object_y_samples: dict[str, list[int]] = {}
@@ -1027,13 +1027,13 @@ def generate_from_config(config: dict[str, Any]) -> dict[str, Any]:
             for object_id, values in raw_object_y_samples.items():
                 if not isinstance(values, list):
                     continue
-                normalized: list[int] = []
+                normalized_y = []
                 for value in values:
                     try:
-                        normalized.append(int(value))
+                        normalized_y.append(int(value))
                     except (TypeError, ValueError):
                         continue
-                object_y_samples[str(object_id)] = normalized
+                object_y_samples[str(object_id)] = normalized_y
 
         raw_delta_x_samples = generation_assets.get("delta_x_samples", [])
         delta_x_samples: list[int] = []

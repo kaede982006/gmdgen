@@ -193,7 +193,7 @@ def _load_csv_fixture(path: Path) -> TimeXFixture:
     if not rows:
         return TimeXFixture(name=path.stem)
     first = rows[0]
-    speed_objects = []
+    speed_objects: list[SpeedObject] = []
     fixture = TimeXFixture(
         name=first.get("fixture_name") or path.stem,
         start_speed=normalize_speed_state(first.get("start_speed") or "normal"),
@@ -264,7 +264,16 @@ def _fixture_from_mapping(payload: dict, *, fallback_name: str) -> TimeXFixture:
 def _optional_float(value: object) -> float | None:
     if value in {None, ""}:
         return None
-    return float(value)
+    try:
+        if isinstance(value, (str, bytes, bytearray)):
+            return float(value)
+        if hasattr(value, "__float__"):
+            return float(value) # type: ignore
+        if hasattr(value, "__index__"):
+            return float(value) # type: ignore
+        return None
+    except (TypeError, ValueError):
+        return None
 
 
 def _float_or_default(value: object, default: float) -> float:

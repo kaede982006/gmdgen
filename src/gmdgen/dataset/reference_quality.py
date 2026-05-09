@@ -20,14 +20,14 @@ def evaluate_reference_levels(dataset_dir: str | Path) -> dict[str, Any]:
     for gmd_file in refs_dir.rglob("*.gmd"):
         try:
             level = parse_gmd_file(gmd_file)
-            content_hash = hash(level.level_string)
+            content_hash = hash(level.raw_text)
             if content_hash in hashes:
                 duplicates.append(str(gmd_file))
                 continue
             hashes.add(content_hash)
             
             # Simple motif estimation based on object count
-            motifs_estimated += max(1, len(level.level_string) // 500)
+            motifs_estimated += max(1, len(level.raw_text) // 500)
             valid_files.append(str(gmd_file))
             
             # Simulated tag extraction

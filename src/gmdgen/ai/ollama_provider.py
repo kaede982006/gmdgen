@@ -6,18 +6,22 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gmdgen.ai.provider import LevelGenerationAIProvider
+    from gmdgen.ai.schemas import AILevelPlanResponse
+else:
+    try:
+        from gmdgen.ai.provider import LevelGenerationAIProvider
+    except Exception:
+        class LevelGenerationAIProvider: # type: ignore
+            pass
 
 try:
     import requests
 except Exception:
-    requests = None
-
-try:
-    from gmdgen.ai.provider import LevelGenerationAIProvider
-except Exception:
-    class LevelGenerationAIProvider:
-        pass
+    requests = None  # type: ignore
 
 
 class OllamaProviderError(RuntimeError):
@@ -104,7 +108,7 @@ def _looks_like_raw_gmd(text: str) -> bool:
     return False
 
 
-def extract_json_object(text: str) -> dict[str, Any]:
+def extract_json_object(text: str) -> dict[str, Any] | list[Any]:
     if text is None:
         raise OllamaEmptyResponse("Ollama returned None")
 
@@ -224,9 +228,9 @@ class OllamaProvider(LevelGenerationAIProvider):
         self.debug_dir = debug_dir
 
     @staticmethod
-    def parse_response(text: str) -> dict[str, Any]:
+    def _parse_json_response(text: str) -> dict[str, Any] | list[Any]:
         data = extract_json_object(text)
-        if "response" in data and isinstance(data["response"], str):
+        if isinstance(data, dict) and "response" in data and isinstance(data["response"], str):
             try:
                 return extract_json_object(data["response"])
             except OllamaProviderError:
@@ -331,7 +335,12 @@ class OllamaProvider(LevelGenerationAIProvider):
                     raise OllamaServerUnavailable(response_text or "server unavailable")
                 
                 try:
-                    return self.parse_response(response_text)
+                    parsed = self._parse_json_response(response_text)
+                    if isinstance(parsed, list):
+                        # If it's a list, we might need to wrap it or handle it specifically
+                        # For now, if it's not a dict, we might have issues if the caller expects a dict
+                        return {"response": parsed}
+                    return parsed
                 except OllamaInvalidJSON as exc:
                     self._save_debug_artifact("raw_ollama_response.txt", response_text)
                     self._save_debug_artifact("json_parse_error.txt", str(exc))

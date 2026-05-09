@@ -369,9 +369,9 @@ def summarize_learned_data_for_prompt(
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     if len(text) <= max_chars:
         return payload
-    payload["retrieved_motifs"] = payload["retrieved_motifs"][:3]
-    payload["learned_failure_patterns"] = payload["learned_failure_patterns"][:5]
-    payload["learned_success_patterns"] = payload["learned_success_patterns"][:5]
+    payload["retrieved_motifs"] = payload["retrieved_motifs"][:3]  # type: ignore
+    payload["learned_failure_patterns"] = payload["learned_failure_patterns"][:5]  # type: ignore
+    payload["learned_success_patterns"] = payload["learned_success_patterns"][:5]  # type: ignore
     return payload
 
 

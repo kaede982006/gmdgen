@@ -406,9 +406,9 @@ def sanitize_report(report: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, str):
             sanitized[key] = redact_text(value)
         elif isinstance(value, dict):
-            sanitized[key] = sanitize_report(value)
+            sanitized[key] = sanitize_report(value)  # type: ignore
         elif isinstance(value, list):
-            sanitized[key] = [redact_text(item) if isinstance(item, str) else item for item in value]
+            sanitized[key] = [redact_text(item) if isinstance(item, str) else item for item in value]  # type: ignore
         else:
             sanitized[key] = value
     return sanitized
@@ -1278,9 +1278,9 @@ def launch_gui() -> int:
                 except Exception as exc:  # noqa: BLE001
                     import traceback
                     err_msg = str(exc)
-                    self.root.after(0, lambda err=err_msg: self._on_extreme_ml_validation_failed(err))
+                    self.root.after(0, lambda err=err_msg: self._on_extreme_ml_validation_failed(err))  # type: ignore
                     return
-                self.root.after(0, lambda payload=report: self._on_extreme_ml_validation_success(payload))
+                self.root.after(0, lambda payload=report: self._on_extreme_ml_validation_success(payload))  # type: ignore
 
             self.worker_thread = threading.Thread(target=task, daemon=True)
             self.worker_thread.start()
@@ -1311,9 +1311,9 @@ def launch_gui() -> int:
                     report = self.app.run_code_validation(include_pytest=True)
                 except Exception as exc:  # noqa: BLE001
                     summary = summarize_generation_error(redact_text(str(exc)))
-                    self.root.after(0, lambda err=summary: self._on_code_validation_failed(err))
+                    self.root.after(0, lambda err=summary: self._on_code_validation_failed(err))  # type: ignore
                     return
-                self.root.after(0, lambda payload=report: self._on_code_validation_success(payload))
+                self.root.after(0, lambda payload=report: self._on_code_validation_success(payload))  # type: ignore
 
             self.worker_thread = threading.Thread(target=task, daemon=True)
             self.worker_thread.start()
@@ -1360,9 +1360,9 @@ def launch_gui() -> int:
                     )
                 except Exception as exc:  # noqa: BLE001
                     summary = summarize_generation_error(redact_text(str(exc)))
-                    self.root.after(0, lambda err=summary: self._on_learning_failed(err))
+                    self.root.after(0, lambda err=summary: self._on_learning_failed(err))  # type: ignore
                     return
-                self.root.after(0, lambda payload=result: self._on_learning_success(payload))
+                self.root.after(0, lambda payload=result: self._on_learning_success(payload))  # type: ignore
 
             self.worker_thread = threading.Thread(target=task, daemon=True)
             self.worker_thread.start()
@@ -1442,15 +1442,15 @@ def launch_gui() -> int:
                 try:
                     result = self.app.generate(config)
                 except QualityGateFailure as qgf:
-                    self.root.after(0, lambda e=qgf: self._on_quality_gate_failed(e))
+                    self.root.after(0, lambda e=qgf: self._on_quality_gate_failed(e))  # type: ignore
                     return
                 except Exception as exc:  # noqa: BLE001
                     error_info = sanitize_exception(exc)
                     gui_msg = format_error_for_gui(error_info)
                     log_msg = format_error_for_log(error_info)
-                    self.root.after(0, lambda err=gui_msg, detail=log_msg: self._on_generate_failed(err, detail))
+                    self.root.after(0, lambda err=gui_msg, detail=log_msg: self._on_generate_failed(err, detail))  # type: ignore
                     return
-                self.root.after(0, lambda payload=result, cfg=config: self._on_generate_success(payload, cfg))
+                self.root.after(0, lambda payload=result, cfg=config: self._on_generate_success(payload, cfg))  # type: ignore
 
             self.worker_thread = threading.Thread(target=task, daemon=True)
             self.worker_thread.start()
@@ -1725,7 +1725,7 @@ def launch_gui() -> int:
                     self.root.after(0, lambda e=e: self._append_log(f"[eval] Error: {e} {traceback.format_exc()}"))
                 self.root.after(0, lambda: self.status_var.set("Ready"))
 
-            if not getattr(self, "worker_thread", None) or not self.worker_thread.is_alive():
+            if not getattr(self, "worker_thread", None) or not self.worker_thread.is_alive():  # type: ignore
                 self.worker_thread = threading.Thread(target=task, daemon=True)
                 self.worker_thread.start()
 
@@ -1745,7 +1745,7 @@ def launch_gui() -> int:
                     self.root.after(0, lambda e=e: self._append_log(f"[eval:live] Error: {e}"))
                 self.root.after(0, lambda: self.status_var.set("Ready"))
 
-            if not getattr(self, "worker_thread", None) or not self.worker_thread.is_alive():
+            if not getattr(self, "worker_thread", None) or not self.worker_thread.is_alive():  # type: ignore
                 self.worker_thread = threading.Thread(target=task, daemon=True)
                 self.worker_thread.start()
 

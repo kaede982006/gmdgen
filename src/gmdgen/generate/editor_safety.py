@@ -204,10 +204,10 @@ def _inspect_raw_object(obj: str, report: EditorSafetyReport) -> None:
                 report.invalid_group_count += 1
                 report.fatal_errors.append(f"invalid_group_id: {group_key}={raw}")
     for coord_key in ("2", "3"):
-        value = extract_object_number(obj, coord_key)
+        value = extract_object_number(obj, coord_key)  # type: ignore
         if value is None:
             continue
-        if not _finite(value):
+        if not _finite(value):  # type: ignore
             report.nan_coordinate_count += 1
             report.fatal_errors.append(f"non_finite_coordinate: {coord_key}")
 

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import itertools
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
@@ -279,7 +280,7 @@ def compute_actual_density_by_section(
     if not section_plans:
         return result
     counts = {idx: 0 for idx in range(len(section_plans))}
-    for plan in list(object_plans or []) + list(trigger_plans or []):
+    for plan in itertools.chain(object_plans or [], trigger_plans or []):
         x = _float_or_none(_value(plan, "x", None))
         if x is None:
             continue

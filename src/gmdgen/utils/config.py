@@ -11,7 +11,7 @@ def config_to_dict_safe(config: Any) -> dict[str, Any]:
         return {}
     if isinstance(config, dict):
         return dict(config)
-    if dataclasses.is_dataclass(config):
+    if dataclasses.is_dataclass(config) and not isinstance(config, type):
         try:
             return dataclasses.asdict(config)
         except Exception:
@@ -42,12 +42,20 @@ def clone_config_with_updates(config: Any, **updates: Any) -> Any:
     if config is None:
         return dict(updates)
     if dataclasses.is_dataclass(config):
-        try:
-            return dataclasses.replace(config, **updates)
-        except Exception:
-            data = config_to_dict_safe(config)
-            data.update(updates)
-            return type(config)(**data)
+        if not isinstance(config, type):
+            try:
+                return dataclasses.replace(config, **updates)
+            except Exception:
+                data = config_to_dict_safe(config)
+                data.update(updates)
+                return type(config)(**data)
+        else:
+            # It's a dataclass class, we can't 'replace' it, but we can't easily 'update' it either
+            # as it's a type. If the intention was to instantiate it:
+            try:
+                return config(**updates)
+            except Exception:
+                return config
     if hasattr(config, "model_copy"):
         return config.model_copy(update=updates)
     if hasattr(config, "copy"):

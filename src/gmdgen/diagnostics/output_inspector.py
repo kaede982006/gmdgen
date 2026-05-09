@@ -5,7 +5,7 @@ from gmdgen.diagnostics.string_sanitizer import MetadataSanitizer
 class OutputInspector:
     @staticmethod
     def inspect_level_description(description: str) -> list[QualityFailure]:
-        failures = []
+        failures: list[QualityFailure] = []
         if MetadataSanitizer.detect_prompt_leak(description):
             failures.append(QualityFailure(QualityFailureReason.PROMPT_LEAK, "Prompt keywords detected in description."))
         if MetadataSanitizer.detect_json_blob(description):
@@ -16,7 +16,7 @@ class OutputInspector:
 
     @staticmethod
     def inspect_object_distribution(objects: list[str], min_count: int = 150) -> list[QualityFailure]:
-        failures = []
+        failures: list[QualityFailure] = []
         if len(objects) < min_count:
             failures.append(QualityFailure(QualityFailureReason.TOO_SPARSE, f"Only {len(objects)} objects found, expected at least {min_count}."))
         # Here we could extract block IDs and calculate diversity
@@ -24,7 +24,7 @@ class OutputInspector:
 
     @staticmethod
     def inspect_repair_loss(raw_count: int, final_count: int, max_loss_ratio: float = 0.3) -> list[QualityFailure]:
-        failures = []
+        failures: list[QualityFailure] = []
         if raw_count == 0:
             return failures
         loss_ratio = (raw_count - final_count) / raw_count
@@ -34,7 +34,7 @@ class OutputInspector:
 
     @staticmethod
     def inspect_section_density(sections: list[dict], drop_index: int = -1) -> list[QualityFailure]:
-        failures = []
+        failures: list[QualityFailure] = []
         if not sections:
             return failures
         # If there's a drop, it should have high density

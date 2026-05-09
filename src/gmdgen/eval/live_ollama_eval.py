@@ -7,9 +7,9 @@ from gmdgen.eval.suite import QualityEvalSuite
 
 def run_live_eval(output_dir: Path) -> dict[str, bool]:
     if os.environ.get("RUN_OLLAMA_LIVE_TESTS") != "1":
-        return {"skipped": True, "reason": "RUN_OLLAMA_LIVE_TESTS != 1"}
+        return {"skipped": True, "reason": "RUN_OLLAMA_LIVE_TESTS != 1"}  # type: ignore
     if not os.environ.get("OLLAMA_HOST"):
-        return {"skipped": True, "reason": "OLLAMA_HOST is not set"}
+        return {"skipped": True, "reason": "OLLAMA_HOST is not set"}  # type: ignore
 
     suite = QualityEvalSuite(output_dir)
     # Using a generated audio file from our tests or a dummy path
@@ -21,4 +21,4 @@ def run_live_eval(output_dir: Path) -> dict[str, bool]:
     )
 
     result = suite.run_case(case, is_live_ollama=True)
-    return {"skipped": False, "passed": result.passed, "report_path": result.report_path}
+    return {"skipped": False, "passed": result.passed, "report_path": result.report_path}  # type: ignore

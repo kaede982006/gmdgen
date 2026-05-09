@@ -109,14 +109,14 @@ def validate_patterns_index_payload(
         errors.append(_issue(path_text, "index_missing_patterns", "Pattern index requires a patterns object"))
     if errors:
         return errors, warnings
-    for cell, pattern_ids in cells.items():
+    for cell, pattern_ids in cells.items():  # type: ignore
         if not isinstance(pattern_ids, list):
             errors.append(_issue(path_text, "index_cell_not_list", f"Cell {cell} must contain a list of pattern ids"))
             continue
         for pattern_id in pattern_ids:
-            if pattern_id not in patterns:
+            if pattern_id not in patterns:  # type: ignore
                 errors.append(_issue(path_text, "index_dangling_pattern_id", f"Cell {cell} references missing pattern {pattern_id}"))
-    for pattern_id, pattern in patterns.items():
+    for pattern_id, pattern in patterns.items():  # type: ignore
         pattern_errors, pattern_warnings = validate_pattern_object_payload(pattern, path=f"{path_text}#{pattern_id}")
         errors.extend(pattern_errors)
         warnings.extend(pattern_warnings)
@@ -145,7 +145,7 @@ def validate_pattern_object_payload(
     if difficulty not in VALID_DIFFICULTIES:
         errors.append(_issue(path_text, "pattern_unknown_difficulty", f"Unknown difficulty: {difficulty}"))
     try:
-        length_beats = float(payload.get("length_beats"))
+        length_beats = float(payload.get("length_beats"))  # type: ignore
         if length_beats <= 0 or length_beats > 128:
             errors.append(_issue(path_text, "pattern_length_out_of_range", "length_beats must be in (0, 128]"))
     except (TypeError, ValueError):

@@ -79,8 +79,8 @@ def run_command_safely(
             command=list(command),
             passed=False,
             return_code=124,
-            stdout_tail=_tail(redact_text(exc.stdout or "")),
-            stderr_tail=_tail(redact_text(exc.stderr or f"timeout after {timeout}s")),
+            stdout_tail=_tail(redact_text(exc.stdout or "")),  # type: ignore
+            stderr_tail=_tail(redact_text(exc.stderr or f"timeout after {timeout}s")),  # type: ignore
             duration_seconds=round(duration, 3),
         )
     except Exception as exc:  # noqa: BLE001
