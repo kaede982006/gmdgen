@@ -2,6 +2,9 @@
 
 ## Highlights
 
+- **Ollama invalid schema fix**: planner JSON normalization safely handles aliases (`target_density` -> `density`) and enum variants without discarding validation.
+- **Forbidden field rejection**: strict planner promptly rejects `raw_gmd` or concrete IDs instead of ignoring them.
+- **Fallback report clarity & report consistency**: resolved log metric discrepancies (e.g., `candidates=0` while `selected_candidate=0`, `final_objects` vs `raw_objects`).
 - **Clean GPL-3.0 baseline**: prior history archived locally, repository
   reset to a clean GPL-3.0-or-later baseline.
 - **Algorithmic redesign applied**: Ollama is a strict symbolic planner, not a
