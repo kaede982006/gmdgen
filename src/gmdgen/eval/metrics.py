@@ -78,9 +78,11 @@ def held_out_perplexity(
     loss_sum = 0.0
     n_tokens = 0
     model.eval()
+    device = next(model.parameters()).device
     with torch.no_grad():
         for i in indices:
             batch = collate([ds[i]])
+            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
             out = model(batch)
             logits = out["logits_id"][:, :-1, :]
             targets = batch["ids"][:, 1:]
@@ -299,7 +301,10 @@ def _check_invariants(samples: list[list[Any]]) -> dict[str, Any]:
 
 
 def evaluate(cfg: EvalConfig) -> dict[str, Any]:
+    from gmdgen.utils.device import get_best_device
     model, vocab, ckpt = load_checkpoint(cfg.ckpt)
+    device = get_best_device()
+    model.to(device)
     samples: list[list[Any]] = []
     diagnostics: list[dict[str, Any]] = []
     for i in range(cfg.n_samples):

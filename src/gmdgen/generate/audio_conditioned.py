@@ -121,6 +121,7 @@ from gmdgen.representation.object_classifier import ObjectClass, classify
 
 
 import time
+from gmdgen.utils.device import apply_device_info_to_report
 from gmdgen.generate.materializer import MaterializationConfig, materialize_level_plans
 
 _GAMEPLAY_MODES = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider"]
@@ -839,6 +840,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         result["audio_file_full_path"] = str(audio_path)
 
     if save_draft and report_path:
+        apply_device_info_to_report(validation_report)
         _save_final_report(validation_report, report_path)
 
     return _ensure_num_sections_for_report(result)

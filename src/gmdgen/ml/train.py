@@ -34,6 +34,7 @@ from gmdgen.ml.dataset import (
     encode_records_to_streams,
 )
 from gmdgen.ml.tokens import IdVocab, PAD_ID
+from gmdgen.utils.device import get_best_device, get_device_info
 
 
 @dataclass(slots=True)
@@ -102,6 +103,9 @@ def _evaluate(
         for i, batch in enumerate(loader):
             if i >= max_batches:
                 break
+            # Move batch to device
+            device = next(model.parameters()).device
+            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
             _, stats = _step_loss(model, batch, cfg)
             losses.append(stats["loss_id"])
     model.train()
@@ -112,8 +116,12 @@ def _evaluate(
 def train(cfg: TrainConfig) -> dict[str, Any]:
     random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
-    if hasattr(torch, "set_num_threads"):
-        torch.set_num_threads(1)
+    
+    device = get_best_device()
+    device_info = get_device_info()
+    if device.type == "cpu":
+        if hasattr(torch, "set_num_threads"):
+            torch.set_num_threads(1)
 
     streams, vocab = encode_records_to_streams(cfg.dataset_dir)
     if not streams:
@@ -159,6 +167,7 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
 
     model_cfg = ModelConfig(ctx=cfg.ctx)
     model = GMDLanguageModel(model_cfg)
+    model.to(device)
     n_params = model.num_parameters()
 
     opt = torch.optim.AdamW(
@@ -181,7 +190,14 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             log_fp.write(json.dumps(record) + "\n")
             log_fp.flush()
 
-    _log({"event": "start", "n_params": n_params, "n_train": n_train, "n_val": n_val})
+    _log({
+        "event": "start",
+        "n_params": n_params,
+        "n_train": n_train,
+        "n_val": n_val,
+        "compute_device": device_info.compute_device,
+        "gpu_available": device_info.gpu_available,
+    })
 
     model.train()
     step = 0
@@ -191,6 +207,10 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
             for batch in train_loader:
                 if step >= cfg.max_steps:
                     break
+                
+                # Move batch to device
+                batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+                
                 lr = _lr_at(step, cfg)
                 for g in opt.param_groups:
                     g["lr"] = lr
@@ -249,6 +269,8 @@ def train(cfg: TrainConfig) -> dict[str, Any]:
         "n_params": n_params,
         "completed_steps": step,
         "final_eval": last_eval,
+        "compute_device": device_info.compute_device,
+        "gpu_used_for_training": device_info.gpu_available,
     }
 
 

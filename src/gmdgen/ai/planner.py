@@ -162,27 +162,35 @@ def parse_ollama_section_plan(payload: str | dict[str, Any]) -> PlannerParseResu
 
     # Handle top-level aliases first so normalization can find them
     if "level_plan" not in data:
-        if "plan" in data and isinstance(data["plan"], dict):
-            data["level_plan"] = data.pop("plan")
-            normalized_shape_repairs.append("top_level_alias:plan->level_plan")
-        elif "level" in data and isinstance(data["level"], dict):
-            data["level_plan"] = data.pop("level")
-            normalized_shape_repairs.append("top_level_alias:level->level_plan")
+        for alias in ["plan", "level", "level_data", "levelPlan"]:
+            if alias in data and isinstance(data[alias], dict):
+                data["level_plan"] = data.pop(alias)
+                normalized_shape_repairs.append(f"top_level_alias:{alias}->level_plan")
+                break
+
+    if "sections" not in data:
+        for alias in ["section_list", "section_plans", "sections_plan"]:
+            if alias in data and isinstance(data[alias], list):
+                data["sections"] = data.pop(alias)
+                normalized_shape_repairs.append(f"top_level_alias:{alias}->sections")
+                break
 
     level_payload = data.get("level_plan")
-    if isinstance(level_payload, dict) and "sections" in level_payload:
-        wrong_location_fields.append("$.level_plan.sections")
-        nested_sections = level_payload.get("sections")
-        if "sections" not in data and isinstance(nested_sections, list):
-            if nested_sections:
-                data["sections"] = nested_sections
-                level_payload.pop("sections", None)
-                normalized_shape_repairs.append("moved_$.level_plan.sections_to_$.sections")
-            else:
-                empty_required_fields.append("$.level_plan.sections")
-        elif isinstance(nested_sections, list):
-            level_payload.pop("sections", None)
-            normalized_shape_repairs.append("removed_$.level_plan.sections_duplicate")
+    if isinstance(level_payload, dict):
+        for nested_alias in ["sections", "section_list", "section_plans"]:
+            if nested_alias in level_payload:
+                wrong_location_fields.append(f"$.level_plan.{nested_alias}")
+                nested_sections = level_payload.get(nested_alias)
+                if "sections" not in data and isinstance(nested_sections, list):
+                    if nested_sections:
+                        data["sections"] = nested_sections
+                        level_payload.pop(nested_alias, None)
+                        normalized_shape_repairs.append(f"moved_$.level_plan.{nested_alias}_to_$.sections")
+                    else:
+                        empty_required_fields.append(f"$.level_plan.{nested_alias}")
+                elif isinstance(nested_sections, list):
+                    level_payload.pop(nested_alias, None)
+                    normalized_shape_repairs.append(f"removed_$.level_plan.{nested_alias}_duplicate")
 
     _normalize_dict_aliases(data)
 
@@ -431,10 +439,30 @@ def _schema_error_message(
     missing_required_fields: list[str] | None,
     empty_required_fields: list[str] | None,
 ) -> str | None:
-    if "$.sections" in (missing_required_fields or []) or "$.sections" in (empty_required_fields or []):
-        return "Top-level sections is required and must be a non-empty array."
+    parts = []
+    missing = missing_required_fields or []
+    empty = empty_required_fields or []
+    
+    # Check for critical missing top-level components first
+    if "$.level_plan" in missing and "$.sections" in missing:
+        return "Both top-level level_plan and non-empty top-level sections are required."
+    
+    if "$.level_plan" in missing:
+        parts.append("level_plan is missing")
+    if "$.sections" in missing:
+        parts.append("sections is missing")
+    elif "$.sections" in empty:
+        parts.append("sections must be a non-empty array")
+    
+    if parts:
+        return ". ".join(parts).capitalize() + "."
+
     if errors:
-        return "; ".join(errors[:4])
+        # Filter and prioritize errors
+        relevant = [e for e in errors if not e.startswith("unknown_top_level_keys")]
+        if not relevant:
+            relevant = errors
+        return "; ".join(relevant[:4])
     return None
 
 
@@ -701,12 +729,19 @@ def _looks_like_raw_gmd(text: str) -> bool:
 def _normalize_dict_aliases(data: dict[str, Any]) -> None:
     if "level_plan" in data and isinstance(data["level_plan"], dict):
         lp = data["level_plan"]
+        
+        # Target duration normalization
+        if "duration" in lp and "target_duration" not in lp:
+            lp["target_duration"] = lp.pop("duration")
+        if "name" in lp and "level_name" not in lp:
+            lp["level_name"] = lp.pop("name")
+
         if "difficulty" in lp:
             diff = str(lp["difficulty"]).lower()
             diff = diff.replace(" gameplay", "").replace(" mode", "").replace(" difficulty", "")
             if "-" in diff:
                 parts = diff.split("-")
-                for p in parts:
+                for p in reversed(parts):
                     if p in DIFFICULTIES:
                         diff = p
                         break
@@ -714,11 +749,11 @@ def _normalize_dict_aliases(data: dict[str, Any]) -> None:
 
         if "sync_intensity" in lp:
             sync = str(lp["sync_intensity"]).lower()
-            if sync == "moderate":
+            if sync in ["moderate", "medium-high"]:
                 lp["sync_intensity"] = "medium"
-            elif sync == "intense":
+            elif sync in ["intense", "extreme", "very high"]:
                 lp["sync_intensity"] = "high"
-            elif sync == "calm":
+            elif sync in ["calm", "relaxed", "very low"]:
                 lp["sync_intensity"] = "low"
 
     if "sections" in data and isinstance(data["sections"], list):
@@ -742,20 +777,32 @@ def _normalize_dict_aliases(data: dict[str, Any]) -> None:
             
             # Value normalization
             if "game_mode" in section:
-                section["game_mode"] = str(section["game_mode"]).lower().replace(" gameplay", "").replace(" mode", "")
+                gm = str(section["game_mode"]).lower()
+                gm = gm.replace(" gameplay", "").replace(" mode", "").replace(" session", "")
+                if "cube" in gm: section["game_mode"] = "cube"
+                elif "ship" in gm: section["game_mode"] = "ship"
+                elif "ball" in gm: section["game_mode"] = "ball"
+                elif "ufo" in gm: section["game_mode"] = "ufo"
+                elif "wave" in gm: section["game_mode"] = "wave"
+                elif "robot" in gm: section["game_mode"] = "robot"
+                elif "spider" in gm: section["game_mode"] = "spider"
+                else: section["game_mode"] = gm
             
             if "speed" in section:
                 speed_str = str(section["speed"]).lower()
-                speed_str = speed_str.replace(" speed", "").replace(" speed", "").replace("x", "").strip()
-                if speed_str in ["half", "0.5", "slow"]:
+                speed_str = speed_str.replace(" speed", "").replace("x", "").strip()
+                if speed_str in ["half", "0.5", "slow", "0.5x"]:
                     section["speed"] = "0.5x"
-                elif speed_str in ["normal", "1", "1.0"]:
+                elif speed_str in ["normal", "1", "1.0", "1x"]:
                     section["speed"] = "1x"
-                elif speed_str in ["fast", "2", "2.0"]:
+                elif speed_str in ["fast", "2", "2.0", "2x"]:
                     section["speed"] = "2x"
-                elif speed_str in ["very fast", "3", "3.0"]:
+                elif speed_str in ["very fast", "3", "3.0", "3x"]:
                     section["speed"] = "3x"
-                elif speed_str in ["super fast", "4", "4.0"]:
+                elif speed_str in ["super fast", "4", "4.0", "4x"]:
                     section["speed"] = "4x"
                 else:
-                    section["speed"] = f"{speed_str}x"
+                    if re.match(r"^\d(\.\d)?$", speed_str):
+                        section["speed"] = f"{speed_str}x"
+                    else:
+                        section["speed"] = "1x" # fallback for garbage

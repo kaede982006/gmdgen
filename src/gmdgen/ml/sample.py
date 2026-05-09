@@ -21,6 +21,7 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from gmdgen.utils.device import get_best_device, get_device_info
 from gmdgen.generate.expand import ExpandedObject
 from gmdgen.ml.architectures import GMDLanguageModel
 from gmdgen.ml.tokens import (
@@ -610,6 +611,8 @@ def generate_from_checkpoint(
     from gmdgen.ml.train import load_checkpoint  # avoid import cycle
 
     model, vocab, ckpt = load_checkpoint(ckpt_path)
+    device = get_best_device()
+    model.to(device)
     cfg = SamplingConfig(
         max_objects=max_objects,
         temperature=temperature,
@@ -620,6 +623,7 @@ def generate_from_checkpoint(
         candidates=candidates,
     )
     objects, diagnostics = generate_with_diagnostics(model, vocab, sections=sections, cfg=cfg)
+    device_info = get_device_info()
     info = {
         "n_objects": len(objects),
         "n_params": ckpt.get("n_params", 0),
@@ -628,6 +632,8 @@ def generate_from_checkpoint(
         "sections": sections,
         "seed": seed,
         "sampling": diagnostics,
+        "compute_device": device_info.compute_device,
+        "gpu_used_for_generation": device_info.gpu_available,
     }
     return objects, info
 

@@ -482,42 +482,26 @@ class OllamaProvider(LevelGenerationAIProvider):
         system_instruction = (
             "You are a strict symbolic Geometry Dash level planner.\n"
             "Return JSON only.\n"
-            "The top-level JSON object must contain exactly these two required keys:\n"
+            "The top-level JSON object MUST contain exactly these two required keys:\n"
             '1. "level_plan"\n'
-            '2. "sections"\n'
-            'Do not put "sections" inside "level_plan".\n'
-            'The field "sections" must be a non-empty top-level array.\n'
+            '2. "sections"\n\n'
+            'DO NOT put "sections" inside "level_plan".\n'
+            'The field "sections" MUST be a non-empty top-level array.\n'
             "For a 198-second song, create at least 8 sections covering 0.0 to 198.0 seconds.\n\n"
-            "Valid top-level shape:\n"
+            "CORRECT Top-level shape:\n"
             "{\n"
             '  "level_plan": {...},\n'
             '  "sections": [...]\n'
             "}\n\n"
-            "Invalid shape:\n"
-            "{\n"
-            '  "level_plan": {\n'
-            '    "sections": []\n'
-            "  }\n"
-            "}\n\n"
-            "Also invalid:\n"
-            "{\n"
-            '  "level_plan": {...}\n'
-            "}\n\n"
-            "Also invalid:\n"
-            "{\n"
-            '  "sections": []\n'
-            "}\n\n"
-            "Do not output markdown fences.\n"
+            "INVALID Shapes (REJECTED):\n"
+            "- sections inside level_plan\n"
+            "- level_plan missing\n"
+            "- sections missing or empty array\n\n"
+            "Do not output markdown fences (```json ... ```).\n"
             "Do not output explanation text.\n"
-            "Do not output raw GMD.\n"
-            "Do not output object lists.\n"
-            "Do not output trigger lists.\n"
-            "Do not output scores.\n"
-            "Do not output validation results.\n"
-            "Do not output raw .gmd save strings.\n"
-            "Do not output group IDs or color channel IDs.\n"
-            "Forbidden keys anywhere:\n"
-            "raw_gmd, gmd, object_plans, objects, trigger_plans, triggers, group_id, color_channel_id, score, validation_passed, final_success, quality_gate\n\n"
+            "Do not output raw GMD save strings (e.g., 1,1,2,0,3,0;...).\n"
+            "Do not output object lists, trigger lists, scores, or group IDs.\n"
+            "Forbidden keys anywhere: raw_gmd, gmd, object_plans, objects, trigger_plans, triggers, group_id, color_channel_id, score, validation_passed, final_success, quality_gate\n\n"
             "Output schema:\n"
             "{\n"
             '  "level_plan": {\n'
@@ -609,7 +593,7 @@ class OllamaProvider(LevelGenerationAIProvider):
                 )
             
             # Map errors to granular classes for better reporting
-            err_str = "; ".join(planner_result.errors)
+            err_str = planner_result.schema_error_message or "; ".join(planner_result.errors)
             if any("forbidden" in e for e in planner_result.errors):
                 fields = ", ".join(planner_result.forbidden_fields)
                 raise OllamaForbiddenField(f"Forbidden fields: {fields}. {err_str}")

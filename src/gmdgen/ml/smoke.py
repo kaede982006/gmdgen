@@ -21,18 +21,20 @@ import torch
 from gmdgen.ml.architectures import GMDLanguageModel, ModelConfig
 from gmdgen.ml.sample import SamplingConfig, generate
 from gmdgen.ml.tokens import BOS_ID, EOS_ID, IdVocab, NUM_SPECIAL
+from gmdgen.utils.device import get_best_device, get_device_info
 
 
 def _build_dummy_batch(cfg: ModelConfig, T: int = 16, B: int = 2) -> dict[str, torch.Tensor]:
-    g = torch.Generator().manual_seed(0)
+    device = get_best_device()
+    g = torch.Generator(device=device).manual_seed(0)
     return {
-        "ids": torch.randint(NUM_SPECIAL, cfg.id_vocab, (B, T), generator=g),
-        "cls": torch.randint(0, cfg.cls_vocab, (B, T), generator=g),
-        "dx": torch.randint(0, cfg.dx_vocab, (B, T), generator=g),
-        "y": torch.randint(0, cfg.y_vocab, (B, T), generator=g),
-        "mode": torch.randint(0, cfg.mode_vocab, (B, T), generator=g),
-        "speed": torch.randint(0, cfg.speed_vocab, (B, T), generator=g),
-        "section": torch.randint(0, cfg.section_vocab, (B, T), generator=g),
+        "ids": torch.randint(NUM_SPECIAL, cfg.id_vocab, (B, T), generator=g, device=device),
+        "cls": torch.randint(0, cfg.cls_vocab, (B, T), generator=g, device=device),
+        "dx": torch.randint(0, cfg.dx_vocab, (B, T), generator=g, device=device),
+        "y": torch.randint(0, cfg.y_vocab, (B, T), generator=g, device=device),
+        "mode": torch.randint(0, cfg.mode_vocab, (B, T), generator=g, device=device),
+        "speed": torch.randint(0, cfg.speed_vocab, (B, T), generator=g, device=device),
+        "section": torch.randint(0, cfg.section_vocab, (B, T), generator=g, device=device),
     }
 
 
@@ -50,8 +52,13 @@ def _build_tiny_vocab() -> IdVocab:
 def main() -> int:
     try:
         torch.manual_seed(0)
+        device = get_best_device()
+        device_info = get_device_info()
+        print(f"[smoke] device={device_info.compute_device} gpu_available={device_info.gpu_available}")
+        
         cfg = ModelConfig(d_model=64, n_layer=2, n_head=2, d_ff=128, ctx=64)
         model = GMDLanguageModel(cfg)
+        model.to(device)
         n = model.num_parameters()
         print(f"[smoke] params={n:,}")
         assert n > 0, "model has no parameters"

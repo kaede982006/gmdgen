@@ -168,6 +168,21 @@ class GenerationReport:
     final_success: bool = False
     consistency_errors: list[str] = field(default_factory=list)
 
+    # Compute & GPU reporting
+    compute_device: str = "cpu"
+    gpu_available: bool = False
+    gpu_name: str | None = None
+    gpu_backend: str | None = None
+    gpu_used_for_training: bool = False
+    gpu_used_for_generation: bool = False
+    gpu_used_for_embeddings: bool = False
+    gpu_fallback_reason: str | None = None
+    torch_available: bool = False
+    cuda_available: bool = False
+    mps_available: bool = False
+    ollama_model: str | None = None
+    ollama_gpu_status_known: bool = False
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "planner_status": self.planner_status,
@@ -184,4 +199,18 @@ class GenerationReport:
             "low_quality_draft_saved": self.low_quality_draft_saved,
             "final_success": self.final_success,
             "consistency_errors": list(self.consistency_errors),
+            # GPU status
+            "compute_device": self.compute_device,
+            "gpu_available": self.gpu_available,
+            "gpu_name": self.gpu_name,
+            "gpu_backend": self.gpu_backend,
+            "gpu_used_for_training": self.gpu_used_for_training,
+            "gpu_used_for_generation": self.gpu_used_for_generation,
+            "gpu_used_for_embeddings": self.gpu_used_for_embeddings,
+            "gpu_fallback_reason": self.gpu_fallback_reason,
+            "torch_available": self.torch_available,
+            "cuda_available": self.cuda_available,
+            "mps_available": self.mps_available,
+            "ollama_model": self.ollama_model,
+            "ollama_gpu_status_known": self.ollama_gpu_status_known,
         }
