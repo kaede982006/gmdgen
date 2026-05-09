@@ -52,6 +52,26 @@ class OllamaInvalidSchema(OllamaProviderError):
     code = "ollama_invalid_schema"
 
 
+class OllamaForbiddenField(OllamaInvalidSchema):
+    code = "ollama_forbidden_field"
+
+
+class OllamaMissingRequiredField(OllamaInvalidSchema):
+    code = "ollama_missing_required_field"
+
+
+class OllamaInvalidEnum(OllamaInvalidSchema):
+    code = "ollama_invalid_enum"
+
+
+class OllamaInvalidTimeCoverage(OllamaInvalidSchema):
+    code = "ollama_invalid_time_coverage"
+
+
+class OllamaUnexpectedResponseShape(OllamaInvalidSchema):
+    code = "ollama_unexpected_response_shape"
+
+
 class OllamaRawGMDRejected(OllamaProviderError):
     code = "ollama_raw_gmd_rejected"
 
@@ -369,22 +389,69 @@ class OllamaProvider(LevelGenerationAIProvider):
             req_dict = request
 
         system_instruction = (
+            "You are a strict symbolic Geometry Dash level planner.\n"
             "Return JSON only. Do not output markdown fences or explanations.\n"
-            "You are a strict symbolic Geometry Dash planner. Output EXACTLY this JSON schema:\n"
+            "Output EXACTLY this JSON structure:\n"
             "{\n"
-            '  "level_plan": {"level_name": "string", "difficulty": "easy|normal|hard|insane|demon", "target_duration": float, "object_budget": int, "style": "string", "sync_intensity": "low|medium|high"},\n'
+            '  "level_plan": {\n'
+            '    "level_name": "string",\n'
+            '    "difficulty": "easy|normal|hard|insane|demon",\n'
+            '    "target_duration": float,\n'
+            '    "object_budget": int,\n'
+            '    "style": "string",\n'
+            '    "sync_intensity": "low|medium|high"\n'
+            '  },\n'
             '  "sections": [\n'
-            '    {"section_id": "s001", "time_start": float, "time_end": float, "game_mode": "cube|ship|ball|ufo|wave|robot|spider", "speed": "0.5x|1x|2x|3x|4x", "density": float, "primary_pattern": "string", "allowed_object_families": ["string"], "forbidden_features": ["string"], "trigger_budget": int, "group_symbols": ["string"], "design_notes": "string"}\n'
-            "  ]\n"
+            '    {\n'
+            '      "section_id": "string",\n'
+            '      "time_start": float,\n'
+            '      "time_end": float,\n'
+            '      "game_mode": "cube|ship|ball|ufo|wave|robot|spider",\n'
+            '      "speed": "0.5x|1x|2x|3x|4x",\n'
+            '      "density": float,\n'
+            '      "primary_pattern": "string",\n'
+            '      "allowed_object_families": ["string"],\n'
+            '      "forbidden_features": ["string"],\n'
+            '      "trigger_budget": int,\n'
+            '      "group_symbols": ["string"],\n'
+            '      "design_notes": "string"\n'
+            '    }\n'
+            '  ]\n'
             "}\n"
-            "ABSOLUTELY FORBIDDEN: raw_gmd, object_plans, trigger_plans, group_id, color_channel_id, score, validation_passed. Include NOTHING else."
+            "CONSTRAINTS:\n"
+            "1. Do NOT generate raw Geometry Dash object strings.\n"
+            "2. Do NOT generate concrete object_plans or trigger_plans.\n"
+            "3. Do NOT include group_id, color_channel_id, score, or validation_passed.\n"
+            "4. Only use the symbolic structure above."
         )
         prompt = f"{system_instruction}\n\nUser Request: {json.dumps(req_dict, ensure_ascii=False)}"
         
         raw_dict = self._post(prompt)
-        planner_result = parse_ollama_section_plan(raw_dict)
+        
+        try:
+            planner_result = parse_ollama_section_plan(raw_dict)
+        except Exception as exc:
+            self._save_debug_artifact("planner_crash.txt", str(exc))
+            raise OllamaInvalidSchema(f"planner_crash: {exc}")
+
         if not planner_result.valid:
-            raise OllamaInvalidSchema("; ".join(planner_result.errors))
+            self._save_debug_artifact("invalid_planner_payload.json", json.dumps(raw_dict, indent=2))
+            self._save_debug_artifact("planner_errors.txt", "; ".join(planner_result.errors))
+            
+            # Map errors to granular classes for better reporting
+            err_str = "; ".join(planner_result.errors)
+            if any("forbidden" in e for e in planner_result.errors):
+                raise OllamaForbiddenField(err_str)
+            if any("missing" in e or "required" in e for e in planner_result.errors):
+                raise OllamaMissingRequiredField(err_str)
+            if any("unknown_game_mode" in e or "unknown_speed" in e or "unknown_difficulty" in e or "unknown_sync_intensity" in e for e in planner_result.errors):
+                raise OllamaInvalidEnum(err_str)
+            if any("time_range" in e or "duration_out_of_range" in e for e in planner_result.errors):
+                raise OllamaInvalidTimeCoverage(err_str)
+            if any("must_be_object" in e or "must_be_list" in e or "must_be_json_object" in e for e in planner_result.errors):
+                raise OllamaUnexpectedResponseShape(err_str)
+                
+            raise OllamaInvalidSchema(err_str)
         
         return AILevelPlanResponse(
             sections=[],
@@ -397,6 +464,7 @@ class OllamaProvider(LevelGenerationAIProvider):
             expected_sync_notes=raw_dict.get("expected_sync_notes", []),
             metadata={
                 "planner_schema": "strict_section_plan_v1",
+                "planner_status": "valid",
                 "planner_report": planner_result.to_report_fields(),
                 "level_plan": raw_dict.get("level_plan", {}),
                 "sections": raw_dict.get("sections", []),
