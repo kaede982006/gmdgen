@@ -89,3 +89,27 @@ def test_log_run_id_is_unique(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         with session(run_id=f"r{_}") as log:
             seen_ids.add(log.run_id)
     assert len(seen_ids) == 3
+
+
+def test_logger_falls_back_when_default_cache_dir_is_unwritable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GMDGEN_CACHE_DIR", raising=False)
+    readonly_home = tmp_path / "readonly-home"
+    monkeypatch.setattr("gmdgen.observability.log.Path.home", lambda: readonly_home)
+
+    original_open = Path.open
+
+    def guarded_open(self: Path, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        if readonly_home in self.parents or self == readonly_home:
+            raise OSError(30, "Read-only file system")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+
+    with session(run_id="fallback") as log:
+        log.event(phase="pipeline", step="start", event="phase_start")
+
+    assert readonly_home not in log.log_path.parents
+    assert log.log_path.exists()

@@ -20,6 +20,7 @@ import json
 import os
 import secrets
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -64,6 +65,13 @@ def _default_log_dir() -> Path:
     return Path.home() / ".cache" / "gmdgen" / "logs"
 
 
+def _fallback_log_dirs() -> list[Path]:
+    return [
+        Path.cwd() / ".gmdgen" / "logs",
+        Path(tempfile.gettempdir()) / "gmdgen" / "logs",
+    ]
+
+
 def _mem_mb() -> float:
     """Return current process memory in MB (best-effort, cross-platform)."""
     try:
@@ -92,8 +100,21 @@ class StructuredLogger:
     _file: Any = None
 
     def __post_init__(self) -> None:
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self._file = self.log_path.open("a", encoding="utf-8")
+        candidates = [self.log_path, *[path / self.log_path.name for path in _fallback_log_dirs()]]
+        last_exc: Exception | None = None
+        for candidate in candidates:
+            try:
+                candidate.parent.mkdir(parents=True, exist_ok=True)
+                self._file = candidate.open("a", encoding="utf-8")
+                self.log_path = candidate
+                return
+            except OSError as exc:
+                last_exc = exc
+                continue
+        # Telemetry must never break generation. Fall back to a sink.
+        self._file = open(os.devnull, "a", encoding="utf-8")
+        if last_exc is not None and int(self.level) >= int(LogLevel.NORMAL):
+            print(f"[observability] log_open_fallback error={last_exc}", file=sys.stderr)
 
     def event(
         self,
