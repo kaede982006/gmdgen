@@ -4,16 +4,22 @@
 
 - **Clean GPL-3.0 baseline**: prior history archived locally, repository
   reset to a clean GPL-3.0-or-later baseline.
-- **Algorithmic redesign already applied**: x-monotone-by-construction
-  generation, 30+-ID diverse safe palette (replacing degenerate `["211"]`
-  fallback), role-tagged objects, per-section palette rotation, per-candidate
-  materialization seed variation.
+- **Algorithmic redesign applied**: Ollama is a strict symbolic planner, not a
+  `.gmd` generator. Final output is accepted only through the local
+  IR -> allocator -> serializer -> validator -> repair/report pipeline.
+- **Legacy object-plan path sealed**: Ollama planner output containing raw
+  `.gmd`, `object_plans`, `trigger_plans`, concrete group/color ids, scores, or
+  validation verdicts is rejected before production generation.
+- **Report consistency is a release gate**: planner fallback, candidate/final
+  counts, validation state, low-quality drafts, and `final_success` are tracked
+  separately so fallback drafts cannot be reported as finished levels.
+- **Pattern fixture churn prevented**: pattern tests are read-only by default;
+  fixture regeneration requires explicit maintenance opt-in.
 - **Ollama-only runtime**: deterministic generation works without any AI;
-  when Ollama is available, it produces structured JSON plans only —
-  bulk object generation stays deterministic.
+  when Ollama is available, it produces structured section plans only.
 - **252 source files** carry an `SPDX-License-Identifier: GPL-3.0-or-later`
   header.
-- **607 tests pass**, 17 skipped (no live Ollama required).
+- **690 tests pass**, 17 skipped (no live Ollama required).
 
 ## Performance
 
@@ -22,7 +28,7 @@
 | object_diversity_score | 0.0017 | ≥0.005 (1k synthetic) |
 | x_mono violations | thousands | 0 (3360 obj synthetic) |
 | candidate distinctness | identical | ≥2 distinct signatures |
-| pytest | 540 (pre-redesign) | 607 |
+| pytest | 540 (pre-redesign) | 690 |
 
 ## Compatibility
 
@@ -50,7 +56,7 @@ python -m pip install .
 python -m pytest -q
 ```
 
-Expected: `607 passed, 17 skipped`.
+Expected: `690 passed, 17 skipped`.
 
 Generated samples in `release_assets/` are deterministic and reproducible
 given the same RawSpec + seed.
