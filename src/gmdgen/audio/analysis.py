@@ -39,6 +39,8 @@ class BeatFeature:
     is_downbeat: bool
     local_energy: float
     rhythmic_density: float
+    dominant_pitch: float = 0.0  # Normalized 0.0 to 1.0 (C to B)
+    pitch_height_hint: float = 0.5  # Normalized 0.0 to 1.0 (Low to High Y)
 
 
 @dataclass(slots=True)
@@ -631,11 +633,53 @@ def _build_beat_features(
     beat_times: list[float],
 ) -> list[BeatFeature]:
     result: list[BeatFeature] = []
+    chroma_all = _build_chroma(frame_features)
+    
     for idx, beat_time in enumerate(beat_times):
-        window = _frames_in_window(frame_features, beat_time - 0.12, beat_time + 0.12)
-        strength = max((frame.onset_strength for frame in window), default=0.0)
-        local_energy = _mean([frame.rms for frame in window])
+        window_indices = [
+            i for i, f in enumerate(frame_features) 
+            if beat_time - 0.12 <= f.time < beat_time + 0.12
+        ]
+        if not window_indices:
+            result.append(
+                BeatFeature(
+                    index=idx,
+                    time=beat_time,
+                    strength=0.0,
+                    is_downbeat=(idx % 4 == 0),
+                    local_energy=0.0,
+                    rhythmic_density=0.0,
+                )
+            )
+            continue
+            
+        window_frames = [frame_features[i] for i in window_indices]
+        window_chroma = [chroma_all[i] for i in window_indices]
+        
+        strength = max((f.onset_strength for f in window_frames), default=0.0)
+        local_energy = _mean([f.rms for f in window_frames])
         rhythmic_density = _density_around(frame_features, beat_time)
+        
+        # Calculate dominant pitch from average chroma in window
+        avg_chroma = [0.0] * 12
+        for c in window_chroma:
+            for i in range(12):
+                avg_chroma[i] += c[i]
+        
+        total_chroma = sum(avg_chroma)
+        if total_chroma > 0:
+            avg_chroma = [v / total_chroma for v in avg_chroma]
+            max_val = max(avg_chroma)
+            dom_pitch_idx = avg_chroma.index(max_val)
+            dominant_pitch = dom_pitch_idx / 11.0
+            
+            # Weighted height hint (0.0 = Low, 1.0 = High)
+            # Higher notes (right side of chroma/mel) mapped to higher Y
+            height_hint = sum(i * v for i, v in enumerate(avg_chroma)) / 11.0
+        else:
+            dominant_pitch = 0.5
+            height_hint = 0.5
+            
         result.append(
             BeatFeature(
                 index=idx,
@@ -644,6 +688,8 @@ def _build_beat_features(
                 is_downbeat=(idx % 4 == 0),
                 local_energy=local_energy,
                 rhythmic_density=rhythmic_density,
+                dominant_pitch=dominant_pitch,
+                pitch_height_hint=height_hint,
             )
         )
     return result

@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Iterable
 
 
@@ -226,30 +228,51 @@ def _segment_changes(
     )
 
 
+@lru_cache(maxsize=128)
+def _get_cached_segments(
+    speed_objects: tuple[SpeedObject, ...],
+    start_speed: SpeedState,
+    song_offset: float,
+) -> list[SpeedSegment]:
+    """Cached version of segment building to avoid redundant $O(M)$ work during generation."""
+    return build_speed_segments(speed_objects, start_speed, song_offset)
+
+
 def pos_for_time_like_gd(
     audio_time: float,
     speed_objects: Iterable[SpeedObject] | None = None,
     start_speed: SpeedState | str | None = SpeedState.NORMAL,
     song_offset: float = 0.0,
 ) -> float:
-    """Piecewise time-to-X mapping following GD LevelTools' conceptual shape.
+    r"""Piecewise time-to-X mapping following GD LevelTools' conceptual shape.
 
-    audio_time is measured on the song timeline. song_offset is applied first,
-    then the path is integrated with the active speed state. This intentionally
-    avoids fixed beat spacing.
+    Optimized with caching and binary search ($O(\log M)$) for high-frequency use.
     """
 
     target_time = _gameplay_time(audio_time, song_offset)
     if target_time <= 0.0:
         return 0.0
 
-    segments = build_speed_segments(
-        speed_objects,
-        start_speed=start_speed,
-        song_offset=song_offset,
-        duration=audio_time,
-    )
-    return segments[-1].end_x if segments else 0.0
+    objs = tuple(sort_speed_objects(speed_objects or []))
+    norm_start = normalize_speed_state(start_speed)
+    segments = _get_cached_segments(objs, norm_start, float(song_offset))
+
+    if not segments:
+        return target_time * value_for_speed_mod(norm_start)
+
+    # Use binary search to find the segment containing audio_time
+    idx = bisect.bisect_right(segments, audio_time, key=lambda s: s.end_time)
+
+    if idx < len(segments):
+        seg = segments[idx]
+        dt = max(0.0, audio_time - seg.start_time)
+        return seg.start_x + dt * seg.px_per_second
+
+    # Beyond last segment
+    last = segments[-1]
+    current_speed = objs[-1].speed_state if objs else norm_start
+    dt = max(0.0, audio_time - last.end_time)
+    return last.end_x + dt * value_for_speed_mod(current_speed)
 
 
 def time_for_pos_like_gd(

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +12,7 @@ from gmdgen.eval.baseline import BaselineEvalReport
 
 @dataclass(slots=True)
 class ExtremeMLValidationReport:
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     baseline_score: float = 0.0
     dataset_health: str = "Unknown"
     learning_memory_health: str = "Unknown"

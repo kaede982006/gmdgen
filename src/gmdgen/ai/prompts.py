@@ -52,6 +52,7 @@ Buildups should gradually increase density and tension. Breaks should provide sp
 Repeat rhythmic motifs as repeated gameplay motifs with small variation.
 Good plans align important gameplay events to strong beats and visual triggers to strong onsets.
 Vary density according to RMS/energy and use section transitions near downbeats or strong boundaries.
+Map melody pitch to object height: use `pitch_height_hint` (0.0=Low, 1.0=High) to guide Y-axis placement.
 Include readable structure objects, gameplay events, and style-appropriate decoration.
 Avoid excessive repetition of one role or one object id.
 Use learned style profiles, retrieved motifs, and previous feedback as inspiration when provided.
@@ -85,6 +86,7 @@ def summarize_audio_for_model(features: Any, *, max_beats: int = 16, max_onsets:
                 "index": int(getattr(beat, "index", idx)),
                 "strength": round(float(getattr(beat, "strength", 0.0)), 4),
                 "is_downbeat": bool(getattr(beat, "is_downbeat", False)),
+                "pitch_height_hint": round(float(getattr(beat, "pitch_height_hint", 0.5)), 4),
             }
             for idx, beat in enumerate(_sample_evenly(beat_items, max_beats))
         ],

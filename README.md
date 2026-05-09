@@ -13,6 +13,7 @@ repair, and report consistency decide whether a final `.gmd` exists.
 
 Architecture references:
 
+- `docs/AI/AI_GMD_GENERATION_GUIDE.md` (Technical ML Expert Guide)
 - `docs/algorithmic_background.md`
 - `docs/ollama_planner_architecture.md`
 - `docs/gmd_generation_pipeline.md`
