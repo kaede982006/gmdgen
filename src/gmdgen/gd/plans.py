@@ -269,6 +269,7 @@ class ValidationReport:
     quality_gate_report: dict[str, Any] = field(default_factory=dict)
     quality_mode: str = "Balanced"
     plan_count_report: PlanCountReport = field(default_factory=PlanCountReport)
+    section_plans: list[dict[str, Any]] = field(default_factory=list)
     planner_status: str = "not_used"
     planner_fallback_used: bool = False
     planner_fallback_reason: str = ""
@@ -429,6 +430,7 @@ class ValidationReport:
             "quality_gate_report": dict(self.quality_gate_report),
             "quality_mode": self.quality_mode,
             "plan_count_report": self.plan_count_report.to_dict(),
+            "section_plans": list(self.section_plans),
             "planner_status": self.planner_status,
             "planner_fallback_used": self.planner_fallback_used,
             "planner_fallback_reason": self.planner_fallback_reason,

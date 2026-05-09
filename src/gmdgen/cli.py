@@ -210,7 +210,6 @@ def main() -> None:
         for attr in (
             "ai_provider",
             "ollama_model",
-            "ollama_model",
             "ollama_context_dir",
             "ollama_reference_levels_dir",
             "ollama_debug_dir",
@@ -219,6 +218,8 @@ def main() -> None:
             value = getattr(args, attr, None)
             if value is not None:
                 config[attr] = value
+                if attr == "ai_provider":
+                    config["use_ai_planner"] = True
         if args.ollama_enable_retrieval:
             config["ollama_enable_retrieval"] = True
         if args.low_cost_mode:

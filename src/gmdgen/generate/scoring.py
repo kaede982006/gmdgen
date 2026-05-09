@@ -419,6 +419,8 @@ class AudioConditionedScore:
     repair_loss_penalty: float = 0.0
     empty_section_penalty: float = 0.0
     repetitive_pattern_penalty: float = 0.0
+    structural_instability_penalty: float = 0.0
+    planner_failure_penalty: float = 0.0
     weights: dict[str, float] = field(
         default_factory=lambda: {
             "beat_sync": 18.0,
@@ -449,6 +451,8 @@ class AudioConditionedScore:
             "repair_loss_penalty": 10.0,
             "empty_section_penalty": 12.0,
             "repetitive_pattern_penalty": 6.0,
+            "structural_instability_penalty": 15.0,
+            "planner_failure_penalty": 25.0,
         }
     )
 
@@ -485,6 +489,8 @@ class AudioConditionedScore:
         total -= self.weights.get("repair_loss_penalty", 0.0) * self.repair_loss_penalty
         total -= self.weights.get("empty_section_penalty", 0.0) * self.empty_section_penalty
         total -= self.weights.get("repetitive_pattern_penalty", 0.0) * self.repetitive_pattern_penalty
+        total -= self.weights.get("structural_instability_penalty", 0.0) * self.structural_instability_penalty
+        total -= self.weights.get("planner_failure_penalty", 0.0) * self.planner_failure_penalty
         return max(0.0, total)
 
     def to_dict(self) -> dict[str, float]:
@@ -520,6 +526,8 @@ class AudioConditionedScore:
             "repair_loss_penalty": round(self.repair_loss_penalty, 4),
             "empty_section_penalty": round(self.empty_section_penalty, 4),
             "repetitive_pattern_penalty": round(self.repetitive_pattern_penalty, 4),
+            "structural_instability_penalty": round(self.structural_instability_penalty, 4),
+            "planner_failure_penalty": round(self.planner_failure_penalty, 4),
         }
 
 
@@ -638,6 +646,15 @@ def compute_audio_conditioned_score(
     score.repair_loss_penalty = _clamp01(float(quality_metrics.get("repair_loss_ratio", 0.0)))
     score.empty_section_penalty = _empty_section_penalty(section_plans or [], objects)
     score.repetitive_pattern_penalty = _repetitive_pattern_penalty(objects)
+    
+    # New structural instability penalty (based on moved objects)
+    x_mono_fixed = int(quality_metrics.get("x_monotone_fixed_count", 0))
+    score.structural_instability_penalty = _clamp01(x_mono_fixed / max(1, len(objects) // 2))
+    
+    # New planner failure penalty (based on fallback status)
+    planner_status = str(quality_metrics.get("planner_status", "success")).lower()
+    score.planner_failure_penalty = 1.0 if "fallback" in planner_status else 0.0
+    
     return score
 
 

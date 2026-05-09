@@ -281,7 +281,7 @@ def test_production_ollama_path_falls_back_on_legacy_object_plans() -> None:
     )
 
     with patch("gmdgen.generate.audio_conditioned.create_ai_provider_from_config", return_value=mock_provider):
-        conversion, metadata = _maybe_apply_ai_provider(
+        conversion, metadata, _ = _maybe_apply_ai_provider(
             config={"use_ai_planner": True, "require_ai_planning": False, "ai_candidate_count": 1},
             features=features,
             section_plans=[],

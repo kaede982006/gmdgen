@@ -1,55 +1,63 @@
-# Emergency Stabilization Log
+# EMERGENCY STABILIZATION LOG
 
-**Start Time**: 2026-05-09
-**Current Git Status**: Cleaned up and stabilized. All fixes committed and pushed.
-**Current Remote Status**: `origin` is up to date with `main` and `v0.1.0`.
-**Tests**: 710 passed, 17 skipped. (Verified all tests pass).
-**Current Failure Symptoms**:
-Resolved `ollama_forbidden_field` by:
-1. Strengthening the system prompt in `ollama_provider.py`.
-2. Filtering the context provided to Ollama to remove forbidden keywords.
-3. Updating report consistency rules in `report_consistency.py`.
-4. Fixing the repair pass prompt.
+- **Work Start Time:** 2026-05-10 01:25:12
+- **Git State:** 1 commit ahead of `origin/main` (local `5c13442`), tag `v0.1.0` locally on `5c13442`.
+- **Remote State:** `v0.1.0` tag on remote points to `bc74d20`.
+- **Failure Symptoms:** Ollama planner schema errors, diagnostics mismatch, persistent fallback issues, map quality instability.
+- **Initial Observation:** 
+    - 733 tests passed, 17 skipped.
+    - Ollama server running with `qwen2.5-coder:7b`.
+    - Local branch `main` is ahead of remote by 1 commit (`fix: harden planner schema fields and GPU device reporting`).
+## Analysis of Layers
 
-## Checklist
-- [x] Establish Log
-- [x] Analyze Debug Log and JSON Report
-- [x] Investigate `ollama_forbidden_field`
-- [x] Fix Prompt/Context in `planner.py` or related
-- [x] Add Repair Pass
-- [x] Fix Report Consistency
-- [x] Verify (Integration test with qwen2.5-coder:7b succeeded)
-- [x] Commit & Push & Release
+### A. GUI Layer
+- GUI calls `generate_from_config` which leads to `audio_conditioned.py`.
+- Diagnostic messages in GUI might not perfectly reflect the most recent `planner.py` logic if they rely on summarized fields that are slightly stale.
 
-## Command Log
-- `git status`, `git remote`, etc.
-- `pytest` run (Fixed failure in `test_code_validation.py`).
-- `python temp_test_198.py` (Integration test with Ollama: SUCCESS).
-- `git push origin main` (SUCCESS).
-- `git tag -f v0.1.0 && git push origin v0.1.0 -f` (SUCCESS).
-- `gh release upload v0.1.0 dist/* --clobber` (SUCCESS).
+### B. Ollama Provider Layer
+- **Critical Finding**: Ollama returns symbolic sections in `metadata`, but these are NEVER applied to the generation pipeline in `audio_conditioned.py`. The pipeline continues using original deterministic sections.
+- Exception handling in `_maybe_apply_ai_provider` uses `break` instead of `continue`, causing premature fallback to local deterministic generation.
 
-## Final State
-- **Git Commit**: 8aec5111717b6dd9c2f462e9466904eae0a51683
-- **GitHub Release**: v0.1.0 updated with hotfix.
-- **Diagnostics**: `raw_ollama_response_preview` and `extracted_json_preview` are now reliably captured and verified by consistency tests.
-- **Reliability**: Headless generation with `qwen2.5-coder:7b` confirmed the fix for the 198-second Stereo Madness style prompt.
+### C. Planner Prompt Layer
+- Prompt was recently hardened, but if sections are ignored, the prompt's effectiveness is nullified.
 
----
+### E. Schema Validation Layer
+- `planner.py` has been updated with better normalization, but the connection to the main pipeline is broken (see B).
 
-## 2026-05-09 Schema-Shape Stabilization (Current Pass)
+### K. GPU/Device Layer
+- `src/gmdgen/utils/device.py` is present and used in `ml/` paths.
+- Integration in `audio_conditioned.py` records device info, but doesn't yet know if Ollama itself is using GPU.
 
-### Immediate checks executed
-- `git status --short --branch`: `main...origin/main`, existing local change in this log file.
-- `git remote -v`: origin = `git@github.com:kaede982006/gmdgen.git`
-- `git log --oneline --decorate --max-count=20`: HEAD at `8aec511`.
-- `python -m compileall -q src tests scripts tools`: pass.
-- `python -m pytest -q`: 5 failures unrelated to planner schema changes (`/home/xisik/.cache/gmdgen/logs` write denied in sandboxed environment).
-- `rg` audit across `src/tests/docs/README`: planner diagnostics and fallback paths identified in `ai/planner.py`, `ai/ollama_provider.py`, `generate/audio_conditioned.py`, `validation/report_consistency.py`, `gui/app.py`.
+## Summary of Fixes
 
-### Root cause observed
-- Current bad payload shape seen in field reports: `{"level_plan":{"sections":[]}}`
-- Failure type is schema shape / required field mismatch, not forbidden-key violation.
-- Missing pieces in prior diagnostics:
-  - no explicit `missing_required_fields` / `wrong_location_fields`
-  - no repair-pass attempt marker for repairable shape errors.
+1.  **Symbolic Sections Integration**: Fixed the bug where AI-suggested section plans (gameplay mode, speed, density) were completely ignored. Added `_convert_ai_sections_to_gd_plans` to map `AISectionPlan` to `SectionPlan` and ensured they are used for materialization.
+2.  **Avoid Object Duplication**: Fixed the bug where AI-generated objects were appended to deterministic baseline objects instead of replacing them. Now baseline speed portals are kept, and the rest are replaced by AI objects.
+3.  **Candidate Loop Hardening**: Changed `break` to `continue` on exception in `_maybe_apply_ai_provider` to allow multiple candidates even if one fails.
+4.  **Reporting Consistency**: Added `section_plans` field to `ValidationReport` to ensure they are saved in the JSON report on disk.
+5.  **Quality Metrics/Loss**: Added `structural_instability_penalty` (based on `x_monotone_fixed`) and `planner_failure_penalty` (for fallbacks) to the scoring function to discourage messy or non-AI outputs.
+6.  **Naming Unification**: Renamed `SectionPlan` and `LevelPlan` in `ir.py` to `AISectionPlan` and `AILevelPlan` to avoid collision with `gd.plans`.
+7.  **GPU Prioritization**: Fully integrated `gmdgen.utils.device` into all ML paths and reported usage in reports.
+
+## Final Verification Result
+- **Unit Tests**: Passed (including new `test_generation_success.py` and `test_gpu_and_planner_hardening.py`).
+- **Mock Generation Smoke**: Success (AI sections applied, no duplication).
+- **Actual Ollama Generation**: Success (7 sections planned for 198s, `success_repaired` status, `final_success: true`).
+
+## Next Checkpoints
+- Monitor Ollama 7B behavior for extremely long songs (> 3 minutes).
+- Consider neural materializer for finer-grained object control beyond symbolic templates.
+- Tag `v0.1.0` is ready for final push.
+
+- `git status --short --branch`
+- `git log --oneline --decorate --max-count=30`
+- `python3 -m pytest -q` (passed 733, skipped 17)
+- `ollama list` (qwen2.5-coder:7b available)
+- `grep -rEn ...` (initial keyword search)
+
+## Optimization Strategy (ML View)
+- *To be defined.*
+
+## Remaining Risks
+- Incomplete synchronization between local/remote tags.
+- Schema errors might persist despite recent hardening.
+- Fallback logic might be masking real AI failures.

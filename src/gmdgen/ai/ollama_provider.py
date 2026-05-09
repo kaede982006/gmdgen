@@ -628,6 +628,7 @@ class OllamaProvider(LevelGenerationAIProvider):
                 "planner_repair_success": None,
                 "planner_repair_skipped_reason": "",
                 "planner_report": success_report,
+                "planner_result_plan": planner_result.plan, # Add the LevelPlan object
                 "level_plan": raw_dict.get("level_plan", {}),
                 "sections": raw_dict.get("sections", []),
             },
@@ -689,6 +690,7 @@ class OllamaProvider(LevelGenerationAIProvider):
                 "planner_repair_success": True,
                 "planner_repair_skipped_reason": "",
                 "planner_report": report,
+                "planner_result_plan": repaired_result.plan, # Add the LevelPlan object
                 "level_plan": repaired_dict.get("level_plan", {}),
                 "sections": repaired_dict.get("sections", []),
             },
@@ -806,6 +808,7 @@ class OllamaProvider(LevelGenerationAIProvider):
                 "planner_repair_reason": "schema_repair",
                 "planner_repair_success": True,
                 "planner_report": report,
+                "planner_result_plan": repaired_result.plan, # Add the LevelPlan object
                 "level_plan": repaired_dict.get("level_plan", {}),
                 "sections": repaired_dict.get("sections", []),
             },

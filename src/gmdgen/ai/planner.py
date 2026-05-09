@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from gmdgen.generate.ir import ColorSymbol, GroupSymbol, LevelPlan, SectionPlan
+from gmdgen.generate.ir import ColorSymbol, GroupSymbol, AILevelPlan as LevelPlan, AISectionPlan as SectionPlan
 
 
 DIFFICULTIES = {"easy", "normal", "hard", "insane", "demon"}

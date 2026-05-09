@@ -7,6 +7,7 @@
   train/inference factor mismatch, added prompt-primed candidate selection,
   and reduced hidden support repair with coverage-aware terrain placement.
 - **Emergency Hotfix: Planner Stabilization (May 9)**: Fixed `ollama_forbidden_field` errors by hardening symbolic planner prompts, adding context filtering for forbidden keywords, and improving diagnostics/reporting consistency.
+- **Final Stabilization: Full AI Integration (May 10)**: Fixed critical bugs where symbolic section plans were ignored and AI objects were duplicated; unified IR naming conventions; integrated detailed quality metrics (structural instability penalties) and GPU acceleration paths with automatic device reporting.
 - **Real neural network**: the dataclass-only "AI" spec is replaced by
   ``GMDLanguageModel`` — a 4-layer causal Transformer (~600k parameters)
   that actually trains. forward / backward / optimizer step are exercised

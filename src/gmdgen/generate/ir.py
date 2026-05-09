@@ -28,7 +28,7 @@ class GenerationConfig:
 
 
 @dataclass(slots=True)
-class SectionPlan:
+class AISectionPlan:
     section_id: str
     time_start: float
     time_end: float
@@ -45,14 +45,14 @@ class SectionPlan:
 
 
 @dataclass(slots=True)
-class LevelPlan:
+class AILevelPlan:
     level_name: str
     difficulty: str
     target_duration: float
     object_budget: int
     style: str
     sync_intensity: str
-    sections: list[SectionPlan] = field(default_factory=list)
+    sections: list[AISectionPlan] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -145,7 +145,7 @@ class RepairResult:
 @dataclass(slots=True)
 class GenerationArtifact:
     config: GenerationConfig
-    level_plan: LevelPlan | None = None
+    level_plan: AILevelPlan | None = None
     level_ir: LevelIR | None = None
     serialized_gmd: str = ""
     report: "GenerationReport | None" = None

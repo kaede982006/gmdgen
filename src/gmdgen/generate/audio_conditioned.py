@@ -120,8 +120,12 @@ from gmdgen.io.gmd_writer import write_gmd_file
 from gmdgen.representation.object_classifier import ObjectClass, classify
 
 
+import logging
 import time
 from gmdgen.utils.device import apply_device_info_to_report
+
+logger = logging.getLogger(__name__)
+from gmdgen.generate.ir import AILevelPlan, AISectionPlan
 from gmdgen.generate.materializer import MaterializationConfig, materialize_level_plans
 
 _GAMEPLAY_MODES = ["cube", "ship", "ball", "ufo", "wave", "robot", "spider"]
@@ -311,7 +315,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     deterministic_planning_seconds = time.time() - start_plan_time
 
     start_ai_time = time.time()
-    ai_conversion, ai_metadata = _maybe_apply_ai_provider(
+    ai_conversion, ai_metadata, section_plans = _maybe_apply_ai_provider(
         config=config,
         features=features,
         section_plans=section_plans,
@@ -332,15 +336,25 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     ai_planning_seconds = time.time() - start_ai_time if int(ai_metadata.get("ai_calls_used", 0) or 0) > 0 else 0.0
 
     if ai_conversion.valid:
-        if ai_conversion.object_plans:
-            # Deprecated non-Ollama compatibility path. Production Ollama
-            # responses are strict symbolic section plans and are rejected
-            # above if they contain object-level model output.
-            ai_budget = max(0, object_budget - len(object_plans) - len(trigger_plans))
-            object_plans.extend(ai_conversion.object_plans[:ai_budget])
-        if ai_conversion.trigger_plans:
-            trigger_budget = max(0, object_budget - len(object_plans) - len(trigger_plans))
-            trigger_plans.extend(ai_conversion.trigger_plans[:trigger_budget])
+        # If AI planning was used and succeeded, its results should REPLACE the 
+        # deterministic baseline objects to avoid duplication.
+        # Production Ollama returns symbolic section plans which are materialized 
+        # inside _maybe_apply_ai_provider.
+        if ai_metadata.get("ai_planning_used") and ai_conversion.object_plans:
+            # Only keep baseline speed portals (critical) and replace everything else.
+            # object_plans currently contains ObjectPlan instances.
+            baseline_speed_portals = [obj for obj in object_plans if "portal" in classify(str(obj.object_id)).name.lower()]
+            object_plans = baseline_speed_portals + ai_conversion.object_plans
+            # Triggers from AI should also replace deterministic baseline triggers
+            trigger_plans = list(ai_conversion.trigger_plans)
+        else:
+            # Deprecated non-Ollama compatibility path or local fallback.
+            if ai_conversion.object_plans:
+                ai_budget = max(0, object_budget - len(object_plans) - len(trigger_plans))
+                object_plans.extend(ai_conversion.object_plans[:ai_budget])
+            if ai_conversion.trigger_plans:
+                trigger_budget = max(0, object_budget - len(object_plans) - len(trigger_plans))
+                trigger_plans.extend(ai_conversion.trigger_plans[:trigger_budget])
     elif ai_provider_name != "local_test_only":
         detail = "; ".join(ai_conversion.errors) or "AI output validation failed"
         raise ValueError(f"{AI_GENERATION_FAILED_MESSAGE} {detail}")
@@ -393,6 +407,7 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
     validation_report.beat_count = len(features.beat_times)
     validation_report.onset_count = len(features.onset_times)
     validation_report.section_count = len(section_plans)
+    validation_report.section_plans = [_section_plan_to_dict(plan) for plan in section_plans]
     validation_report.speed_object_count = len(speed_objects)
     validation_report.generated_trigger_count = len(trigger_plans)
     validation_report.metrics["time_x_invalid_count"] = int(time_x_report["invalid_count"])  # type: ignore
@@ -460,7 +475,11 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
             max_group_id=max_group_id,
             safe_mode=safe_mode,
         )
-        validation_report.metrics["string_repair_total_fixed"] = repair_report.total_fixed
+        validation_report.metrics["string_repair_total_fixed"] = int(repair_report.total_fixed)
+        validation_report.metrics["x_monotone_fixed_count"] = int(repair_report.x_monotone_fixed)
+        validation_report.metrics["orphan_trigger_removed_count"] = int(repair_report.orphan_trigger_removed)
+        validation_report.metrics["density_spread_count"] = int(repair_report.density_spread)
+        validation_report.metrics["grid_snapped_count"] = int(repair_report.grid_snapped)
     else:
         repair_report = None
     final_plan_snapshot = snapshot_from_level_objects(
@@ -549,6 +568,8 @@ def generate_audio_synced_level_from_config(config: dict[str, Any]) -> dict[str,
         for issue in issues:
             validation_report.add_issue(issue)
             validation_report.editor_validity_warnings.append(issue)
+
+    validation_report.metrics["planner_status"] = ai_metadata.get("planner_status", "not_used")
 
     start_score_time = time.time()
     score = compute_audio_conditioned_score(
@@ -850,6 +871,47 @@ def _save_final_report(report: ValidationReport, path: Path) -> None:
     path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _convert_ai_sections_to_gd_plans(
+    ai_sections: list[AISectionPlan],
+    *,
+    speed_objects: list[SpeedObject],
+    start_speed: SpeedState,
+    song_offset: float,
+) -> list[SectionPlan]:
+    from gmdgen.gd.time_mapping import pos_for_time_like_gd, normalize_speed_state
+    
+    plans: list[SectionPlan] = []
+    for ai_section in ai_sections:
+        start_time = float(ai_section.time_start)
+        end_time = float(ai_section.time_end)
+        speed_state = normalize_speed_state(ai_section.speed)
+        
+        # Determine section type based on game mode or pattern
+        section_type = "normal"
+        gm = ai_section.game_mode.lower()
+        if "intro" in gm or "outro" in gm:
+            section_type = "intro" if "intro" in gm else "outro"
+        elif "drop" in gm or ai_section.density > 0.7:
+            section_type = "drop"
+            
+        plans.append(
+            SectionPlan(
+                start_time=start_time,
+                end_time=end_time,
+                start_x=pos_for_time_like_gd(start_time, speed_objects, start_speed, song_offset),
+                end_x=pos_for_time_like_gd(end_time, speed_objects, start_speed, song_offset),
+                section_type=section_type,
+                gameplay_mode=ai_section.game_mode,
+                speed_state=speed_state,
+                density_target=float(ai_section.density),
+                decoration_intensity=max(0.1, min(1.0, float(ai_section.density) * 1.1)),
+                trigger_intensity=max(0.1, min(1.0, float(ai_section.density) * 0.9)),
+                difficulty_target=0.5,
+            )
+        )
+    return plans
+
+
 def _maybe_apply_ai_provider(
     *,
     config: dict[str, Any],
@@ -949,7 +1011,7 @@ def _maybe_apply_ai_provider(
         metadata["ai_fallback_reason"] = "This output was generated without Ollama and is for testing only."
         return AIPlanConversionResult(
             response=AILevelPlanResponse(provider="local_test_only", model="local-heuristic")
-        ), metadata
+        ), metadata, section_plans
 
     # If AI planning is not explicitly enabled, return local deterministic plan
     if not use_ai_planner and not has_explicit_client:
@@ -959,7 +1021,7 @@ def _maybe_apply_ai_provider(
         metadata["ai_fallback_reason"] = "AI planning disabled by config; using deterministic local path."
         return AIPlanConversionResult(
             response=AILevelPlanResponse(provider="local", model="deterministic")
-        ), metadata
+        ), metadata, section_plans
 
     metadata["ai_planning_attempted"] = True
     context_chunks = _load_ai_context_chunks(config)
@@ -988,6 +1050,7 @@ def _maybe_apply_ai_provider(
         candidate_count = max(candidate_count, 5)
 
     best_conversion: AIPlanConversionResult | None = None
+    best_sections: list[SectionPlan] = section_plans
     best_report_score = -1.0
     candidate_reports: list[dict[str, Any]] = []
     selected_candidate_id: int | None = None
@@ -1052,7 +1115,7 @@ def _maybe_apply_ai_provider(
 
             if require_ai_planning:
                 raise ProviderError(message, code=last_error_code) from exc
-            break
+            continue
 
         response_metadata = response.metadata if isinstance(getattr(response, "metadata", None), dict) else {}
         planner_report = response_metadata.get("planner_report", {}) if isinstance(response_metadata, dict) else {}
@@ -1101,6 +1164,18 @@ def _maybe_apply_ai_provider(
             conversion.errors.append("ollama_object_plan_output_rejected")
 
         if conversion.valid:
+            # Use AI-suggested sections if available (Ollama production path)
+            effective_sections = section_plans
+            ai_plan = response_metadata.get("planner_result_plan")
+            if ai_plan and hasattr(ai_plan, "sections") and ai_plan.sections:
+                # Convert AISectionPlan objects to SectionPlan objects
+                effective_sections = _convert_ai_sections_to_gd_plans(
+                    ai_plan.sections,
+                    speed_objects=speed_objects,
+                    start_speed=start_speed_val,
+                    song_offset=song_offset_val
+                )
+
             # Deterministic Expansion of AI-suggested plan.
             # Vary seed per candidate so deterministic materialization produces
             # distinct candidates even when the AI returns identical responses.
@@ -1108,7 +1183,7 @@ def _maybe_apply_ai_provider(
                 from dataclasses import replace as _dc_replace
                 candidate_mat_config = _dc_replace(mat_config, seed=mat_config.seed + candidate_id * 7919)
                 expanded_objects = materialize_level_plans(
-                    section_plans, # We use original sections for now
+                    effective_sections,
                     config=candidate_mat_config,
                     audio_features=features,
                     motif_library=motif_library,
@@ -1118,9 +1193,11 @@ def _maybe_apply_ai_provider(
                     start_speed=start_speed_val,
                     song_offset=song_offset_val,
                 )
+                logger.info("AI Candidate %d: materialized %d objects from %d sections", 
+                           candidate_id, len(expanded_objects), len(effective_sections))
                 conversion.object_plans.extend(expanded_objects)
 
-            score = _candidate_score_from_conversion(conversion, section_plans=section_plans, min_final_object_count=8)
+            score = _candidate_score_from_conversion(conversion, section_plans=effective_sections, min_final_object_count=8)
             report = build_candidate_report(
                 candidate_id=candidate_id,
                 conversion_valid=conversion.valid,
@@ -1128,13 +1205,14 @@ def _maybe_apply_ai_provider(
                 trigger_count=len(conversion.trigger_plans),
                 errors=conversion.errors,
                 warnings=conversion.warnings,
-                section_plans=section_plans,
+                section_plans=effective_sections,
                 score=score,
             )
             candidate_reports.append(report.to_dict())
 
             if score > best_report_score + config.get("min_quality_improvement_delta", 0.03):
                 best_conversion = conversion
+                best_sections = effective_sections
                 best_report_score = score
                 selected_candidate_id = candidate_id
                 rounds_without_improvement = 0
@@ -1164,7 +1242,7 @@ def _maybe_apply_ai_provider(
         fallback_res = AIPlanConversionResult(response=fallback_response)
         fallback_res.warnings.append(f"Ollama AI plan was invalid JSON or failed: {last_error_code}")
 
-        return fallback_res, metadata
+        return fallback_res, metadata, section_plans
 
     for report in candidate_reports:
         if isinstance(report, dict):
@@ -1180,7 +1258,7 @@ def _maybe_apply_ai_provider(
         "ai_output_trigger_count": len(best_conversion.trigger_plans),
     })
 
-    return best_conversion, metadata
+    return best_conversion, metadata, best_sections
 
 
 def _audit_ollama_context_for_legacy_symbols(context_chunks: list[dict[str, Any]]) -> dict[str, list[str]]:
