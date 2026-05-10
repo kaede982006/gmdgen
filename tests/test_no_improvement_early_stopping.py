@@ -34,7 +34,7 @@ def test_no_improvement_early_stopping():
     mock_provider.generate_level_plan.return_value = AILevelPlanResponse(provider="mock", model="static")
     
     with patch("gmdgen.generate.audio_conditioned.create_ai_provider_from_config", return_value=mock_provider):
-        conversion, metadata = _maybe_apply_ai_provider(
+        conversion, metadata, _ = _maybe_apply_ai_provider(
             config=config,
             features=features,
             section_plans=section_plans,

@@ -86,7 +86,7 @@ def test_deterministic_fallback_on_json_error():
     features.confidence_report = None
     features.beat_features = []
     
-    conversion, metadata = _maybe_apply_ai_provider(
+    conversion, metadata, _ = _maybe_apply_ai_provider(
         config=config,
         features=features,
         section_plans=[],

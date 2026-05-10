@@ -41,7 +41,7 @@ def test_extreme_ml_time_budget():
     
     with patch("gmdgen.generate.audio_conditioned.create_ai_provider_from_config", return_value=mock_provider):
         start_time = time.time()
-        conversion, metadata = _maybe_apply_ai_provider(
+        conversion, metadata, _ = _maybe_apply_ai_provider(
             config=config,
             features=features,
             section_plans=section_plans,
