@@ -5,12 +5,14 @@ import argparse
 import logging
 import json
 import uuid
+import random
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict
 
 from gmdgen.ai.factory import create_ai_provider_from_config
 from gmdgen.generate.generator import generate_from_config
+from gmdgen.utils.seed import set_global_seed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-low-quality-draft", action="store_true", help="Allow saving low quality drafts")
     parser.add_argument("--quiet", "-q", action="store_true", help="Reduce console output (full logs saved to run.log)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
 
     subparsers = parser.add_subparsers(dest="command", required=False)
 
@@ -44,28 +47,41 @@ def build_parser() -> argparse.ArgumentParser:
     # Train
     train_p = subparsers.add_parser("train", help="Build dataset context")
     train_p.add_argument("--dataset", default="dataset", help="Path to dataset directory")
+    train_p.add_argument("--force-rebuild", action="store_true", help="Force rebuild of dataset index")
 
     # Generate
     gen_p = subparsers.add_parser("generate", help="Generate a new level")
-    gen_p.add_argument("--audio-file", "--audio", dest="audio_file", help="Path to audio file")
+    gen_p.add_argument("--audio-file", "--audio", dest="audio_file", help="Path to audio file for conditioning")
     gen_p.add_argument("--config", dest="config", help="Path to generation config file (YAML)")
     gen_p.add_argument("--test-local-provider", dest="test_local_provider", action="store_true", help="Run generate with local test provider and print JSON to stdout (testing)")
-    gen_p.add_argument("--ai-provider", dest="provider", choices=["gemini"], help="(alias) AI provider")
-    gen_p.add_argument("--provider", default="gemini", choices=["gemini"], help="AI provider")
     gen_p.add_argument("--output", "--output-dir", dest="output_dir", default="outputs", help="Output directory")
     gen_p.add_argument("--dry-run", action="store_true", help="Run generation without saving final files")
+    
+    # Exposing hidden but implemented features
+    gen_p.add_argument("--object-count", type=int, help="Target number of objects (default: 1200)")
+    gen_p.add_argument("--min-objects", type=int, help="Minimum number of objects (default: 100)")
+    gen_p.add_argument("--max-objects", type=int, help="Maximum number of objects (default: 40000)")
+    gen_p.add_argument("--duration", "--length", type=float, help="Target duration in seconds")
+    gen_p.add_argument("--difficulty", type=float, help="Difficulty value [0.0 - 1.0] (default: 0.5)")
+    gen_p.add_argument("--seed", type=int, help="Random seed for generation")
+    gen_p.add_argument("--no-repair", action="store_false", dest="repair_level", help="Disable automatic structure repair")
+    gen_p.set_defaults(repair_level=True)
 
     # Validate
-    val_p = subparsers.add_parser("validate", help="Validate a level")
-    val_p.add_argument("input", help="Input file")
+    val_p = subparsers.add_parser("validate", help="Validate a level's structure and playability")
+    val_p.add_argument("input", help="Input .gmd file or level string")
+    val_p.add_argument("--output", help="Path to save validation report (JSON)")
 
     # Repair
-    rep_p = subparsers.add_parser("repair", help="Repair a level")
-    rep_p.add_argument("input", help="Input file")
+    rep_p = subparsers.add_parser("repair", help="Repair common level structure issues")
+    rep_p.add_argument("input", help="Input .gmd file")
+    rep_p.add_argument("--output", help="Output path for repaired .gmd file")
+    rep_p.add_argument("--report", help="Path to save repair report (JSON)")
 
     # Report
-    rpt_p = subparsers.add_parser("report", help="Generate a report")
-    rpt_p.add_argument("input", help="Input file")
+    rpt_p = subparsers.add_parser("report", help="Generate a human-readable quality report")
+    rpt_p.add_argument("input", help="Input generation_report.json")
+    rpt_p.add_argument("--output", help="Output path for human-readable report")
 
     return parser
 
@@ -111,11 +127,11 @@ class CLILogger:
             print(rendered_line)
 
 
-def get_run_id_and_dir():
+def get_run_id_and_dir(output_base: str = "outputs"):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     uid = uuid.uuid4().hex[:6]
     run_id = f"{timestamp}_{uid}"
-    output_dir = Path("outputs/runs") / run_id
+    output_dir = Path(output_base) / "runs" / run_id
     return run_id, output_dir
 
 def cmd_doctor(args):
@@ -166,11 +182,17 @@ def cmd_train(args):
     dataset_path = Path(args.dataset)
     cli_logger.log_event("TRAIN", "scan", f"Scanning dataset: {dataset_path}", 10, command="train")
     
-    report_file = output_dir / "train_report.json"
-    with open(report_file, "w") as f:
-        json.dump({"status": "success", "items_processed": 0}, f)
-        
-    cli_logger.log_event("TRAIN", "complete", "Training complete", 100, command="train")
+    from gmdgen.ai.dataset_index import build_dataset_index
+    try:
+        index = build_dataset_index(dataset_path, force_rebuild=getattr(args, "force_rebuild", False))
+        report_file = output_dir / "train_report.json"
+        with open(report_file, "w") as f:
+            json.dump(index.to_dict(), f, indent=2)
+            
+        cli_logger.log_event("TRAIN", "complete", f"Training complete. Files indexed: {len(index.documents)}", 100, command="train")
+    except Exception as e:
+        cli_logger.log_event("ERROR", "train", f"Training failed: {e}", 100, level="ERROR", command="train")
+        sys.exit(1)
 
 def cmd_generate(args):
     # Support a test mode where a single-run JSON output is printed for CI tests
@@ -185,9 +207,9 @@ def cmd_generate(args):
                 cfg = {}
         if getattr(args, "audio_file", None):
             cfg["audio_file"] = str(args.audio_file)
-        if getattr(args, "test_local_provider", False):
-            cfg["ai_provider"] = "local_test_only"
-            cfg["allow_local_test_provider"] = True
+        
+        cfg["ai_provider"] = "local_test_only"
+        cfg["allow_local_test_provider"] = True
         
         # Call internal generate function and emit JSON to stdout for tests
         result = generate_from_config(cfg)
@@ -195,10 +217,15 @@ def cmd_generate(args):
         return
 
     # Normal real generation
-    run_id, output_dir = get_run_id_and_dir()
+    run_id, output_dir = get_run_id_and_dir(args.output_dir)
     cli_logger = CLILogger(run_id, output_dir, is_quiet=getattr(args, "quiet", False), is_debug=getattr(args, "debug", False))
     cli_logger.log_event("SYSTEM", "init", f"run_id={run_id} command=generate started", 0, command="generate")
     
+    # Seed handling
+    seed = args.seed if args.seed is not None else random.randint(0, 999999)
+    set_global_seed(seed)
+    cli_logger.log_event("CONFIG", "init", f"seed={seed}", 2, command="generate")
+
     # Validation of API key for Gemini
     api_key_env = args.api_key_env or "GEMINI_API_KEY"
     if not os.environ.get(api_key_env):
@@ -208,10 +235,19 @@ def cmd_generate(args):
     cfg = {
         "ai_provider": "gemini",
         "gemini_model": args.model or "gemini-2.5-flash",
-        "output_dir": output_dir.name,
-        "allow_low_quality_draft": getattr(args, "allow_low_quality_draft", False)
+        "output_dir": str(output_dir),
+        "allow_low_quality_draft": getattr(args, "allow_low_quality_draft", False),
+        "seed": seed,
+        "repair_level": getattr(args, "repair_level", True),
     }
     
+    # Exposing parameters to config
+    if args.object_count is not None: cfg["num_objects"] = args.object_count
+    if args.min_objects is not None: cfg["min_object_count"] = args.min_objects
+    if args.max_objects is not None: cfg["max_object_count"] = args.max_objects
+    if args.duration is not None: cfg["target_duration"] = args.duration
+    if args.difficulty is not None: cfg["difficulty"] = args.difficulty
+
     if getattr(args, "config", None):
         try:
             import yaml
@@ -225,42 +261,46 @@ def cmd_generate(args):
     if getattr(args, "audio_file", None):
         cfg["audio_file"] = str(args.audio_file)
 
-    cli_logger.log_event("CONFIG", "init", f"provider=gemini model={cfg['gemini_model']} fallback=disabled", 5, command="generate")
+    cli_logger.log_event("CONFIG", "init", f"provider=gemini model={cfg.get('gemini_model')} fallback=disabled", 5, command="generate")
     
     try:
-        cli_logger.log_event("AUDIO", "load", "Loading audio", 20, command="generate")
-        cli_logger.log_event("PROVIDER", "call", f"Gemini request started model={cfg['gemini_model']}", 40, command="generate")
+        if cfg.get("audio_file"):
+            cli_logger.log_event("AUDIO", "load", f"Loading audio: {cfg['audio_file']}", 10, command="generate")
+            
+        cli_logger.log_event("PROVIDER", "call", f"Gemini request started model={cfg.get('gemini_model')}", 40, command="generate")
         
         result = generate_from_config(cfg)
         
         cli_logger.log_event("PROVIDER", "call", "Gemini request complete", 50, command="generate")
         
         final_score = result.get("final_score", 0.0)
-        passed = result.get("validation_report", {}).get("passed", False) if isinstance(result.get("validation_report"), dict) else False
+        validation = result.get("validation_report", {})
+        passed = validation.get("passed", False) if isinstance(validation, dict) else False
         
-        # Simple quality gate proxy for dummy test harness vs real results
-        # If final_objects == 0 or it has fatal errors, it's failed
         is_success = passed and result.get("num_objects", 0) > 0
-        cli_logger.log_event("QUALITY_GATE", "check", f"passed={is_success} final_score={final_score:.2f}", 93, command="generate")
+        cli_logger.log_event("QUALITY_GATE", "check", f"passed={is_success} final_score={final_score:.2f} objects={result.get('num_objects')}", 93, command="generate")
         
         report_file = output_dir / "generation_report.json"
         with open(report_file, "w") as f:
             json.dump(result, f, indent=2)
             
-        if is_success:
-            out_file = output_dir / "generated.gmd"
-            with open(out_file, "w") as f:
-                f.write(result.get("output_gmd", "gmd_data"))
-            cli_logger.log_event("OUTPUT", "save", f"wrote {out_file}", 100, command="generate")
-        else:
-            if getattr(args, "allow_low_quality_draft", False):
-                out_file = output_dir / "low_quality_draft.gmd"
+        if not args.dry_run:
+            if is_success:
+                out_file = output_dir / "generated.gmd"
                 with open(out_file, "w") as f:
-                    f.write(result.get("output_gmd", "gmd_data_draft"))
-                cli_logger.log_event("OUTPUT", "save", f"wrote draft {out_file}", 100, command="generate")
+                    f.write(result.get("output_gmd", "gmd_data"))
+                cli_logger.log_event("OUTPUT", "save", f"wrote {out_file}", 100, command="generate")
             else:
-                cli_logger.log_event("QUALITY_GATE", "fail", "Quality gate failed, not saving generated.gmd", 100, level="ERROR", command="generate")
-                sys.exit(1)
+                if getattr(args, "allow_low_quality_draft", False):
+                    out_file = output_dir / "low_quality_draft.gmd"
+                    with open(out_file, "w") as f:
+                        f.write(result.get("output_gmd", "gmd_data_draft"))
+                    cli_logger.log_event("OUTPUT", "save", f"wrote draft {out_file}", 100, command="generate")
+                else:
+                    cli_logger.log_event("QUALITY_GATE", "fail", "Quality gate failed, not saving generated.gmd", 100, level="ERROR", command="generate")
+                    sys.exit(1)
+        else:
+            cli_logger.log_event("SYSTEM", "dry-run", "Dry-run complete, skipping file save", 100, command="generate")
     
     except Exception as e:
         cli_logger.log_event("ERROR", "generate", f"Generation failed: {e}", 100, level="ERROR", command="generate")
@@ -272,33 +312,91 @@ def cmd_generate(args):
 
 
 def cmd_validate(args):
+    from gmdgen.generate.validator import validate_gmd_file, validate_gmd_text
     run_id, output_dir = get_run_id_and_dir()
     cli_logger = CLILogger(run_id, output_dir, is_quiet=getattr(args, "quiet", False), is_debug=getattr(args, "debug", False))
     cli_logger.log_event("SYSTEM", "init", f"run_id={run_id} command=validate started", 0, command="validate")
     
-    report_file = output_dir / "validation_report.json"
-    with open(report_file, "w") as f:
-        json.dump({"status": "success"}, f)
+    try:
+        input_path = Path(args.input)
+        if input_path.is_file():
+            report = validate_gmd_file(input_path)
+        else:
+            report = validate_gmd_text(args.input)
+            
+        if args.output:
+            with open(args.output, "w") as f:
+                json.dump(report, f, indent=2)
         
-    cli_logger.log_event("VALIDATION", "complete", "Validation complete", 100, command="validate")
+        cli_logger.log_event("VALIDATION", "complete", f"Validation complete. Passed: {report.get('passed')}", 100, command="validate")
+    except Exception as e:
+        cli_logger.log_event("ERROR", "validate", f"Validation failed: {e}", 100, level="ERROR", command="validate")
+        sys.exit(1)
 
 def cmd_repair(args):
+    from gmdgen.io.gmd_parser import parse_gmd_text
+    from gmdgen.io.gmd_writer import serialize_tags
+    from gmdgen.generate.repairer import repair_level_objects, repair_report_to_dict
+    
     run_id, output_dir = get_run_id_and_dir()
     cli_logger = CLILogger(run_id, output_dir, is_quiet=getattr(args, "quiet", False), is_debug=getattr(args, "debug", False))
     cli_logger.log_event("SYSTEM", "init", f"run_id={run_id} command=repair started", 0, command="repair")
     
-    report_file = output_dir / "repair_report.json"
-    with open(report_file, "w") as f:
-        json.dump({"status": "success"}, f)
+    try:
+        input_path = Path(args.input)
+        text = input_path.read_text(encoding="utf-8")
+        tags = parse_gmd_text(text)
         
-    cli_logger.log_event("REPAIR", "complete", "Repair complete", 100, command="repair")
+        level_data = tags.get("k4")
+        if not level_data:
+            raise ValueError("No k4 level data found in GMD")
+            
+        from gmdgen.io.gmd_decoder import decode_level_data, encode_level_data
+        decoded = decode_level_data(level_data)
+        objects = decoded.split(";")
+        
+        repaired_objects, report = repair_level_objects(objects)
+        repaired_text = ";".join(repaired_objects)
+        tags["k4"] = encode_level_data(repaired_text)
+        
+        if args.output:
+            out_text = serialize_tags(tags)
+            Path(args.output).write_text(out_text, encoding="utf-8")
+            
+        if args.report:
+            with open(args.report, "w") as f:
+                json.dump(repair_report_to_dict(report), f, indent=2)
+        
+        cli_logger.log_event("REPAIR", "complete", f"Repair complete. Fixed issues: {report.total_fixed}", 100, command="repair")
+    except Exception as e:
+        cli_logger.log_event("ERROR", "repair", f"Repair failed: {e}", 100, level="ERROR", command="repair")
+        sys.exit(1)
 
 def cmd_report(args):
     run_id, output_dir = get_run_id_and_dir()
     cli_logger = CLILogger(run_id, output_dir, is_quiet=getattr(args, "quiet", False), is_debug=getattr(args, "debug", False))
     cli_logger.log_event("SYSTEM", "init", f"run_id={run_id} command=report started", 0, command="report")
     
-    cli_logger.log_event("REPORT", "complete", "Report complete", 100, command="report")
+    try:
+        with open(args.input, "r") as f:
+            data = json.load(f)
+            
+        # Simplistic textual report for now
+        lines = []
+        lines.append(f"Level Report: {data.get('output_name', 'unknown')}")
+        lines.append(f"Final Score: {data.get('final_score', 0.0)}")
+        lines.append(f"Objects: {data.get('num_objects', 0)}")
+        
+        output_text = "\n".join(lines)
+        if args.output:
+            Path(args.output).write_text(output_text)
+        else:
+            print(output_text)
+            
+        cli_logger.log_event("REPORT", "complete", "Report complete", 100, command="report")
+    except Exception as e:
+        cli_logger.log_event("ERROR", "report", f"Report failed: {e}", 100, level="ERROR", command="report")
+        sys.exit(1)
 
 
 def main():

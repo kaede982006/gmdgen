@@ -5,10 +5,10 @@ gmdgen is a Gemini API-exclusive, headless CLI software for generating Geometry 
 ## Features & Architecture
 
 * **Gemini API Exclusive**: This project has been fully converted to a Gemini API-only CLI software. The primary provider is Gemini, and legacy paths (Ollama, local LLMs, OpenAI, and their respective fallbacks) have been completely removed.
-* **API Key Required**: You must provide a `GEMINI_API_KEY` to run live generation.
-* **Model Selection**: You can specify the model via the `GEMINI_MODEL` environment variable or the `--model` CLI option. The recommended and default model is `gemini-2.5-flash`.
-* **Headless Operations**: All generations run headlessly. No GUI blocks or `GUI-only` requirements remain in the execution pathways.
+* **Audio-Conditioned Generation**: Generates Geometry Dash levels synced to your music using advanced audio analysis (onsets, beats, sections).
+* **AI Planning**: Uses Gemini to create high-level level plans that are then materialized into deterministic object structures.
 * **Strict POSIX Options**: The CLI adheres exclusively to Linux/POSIX-style short (`-h`, `-q`) and long (`--help`, `--provider`) options.
+* **Headless Operations**: All generations run headlessly. No GUI blocks remain.
 
 ## Getting Started
 
@@ -25,9 +25,35 @@ gmdgen doctor --check-provider-live
 
 ### Generating a Level
 
-Use `gmdgen generate` to run the main pipeline. 
+Use `gmdgen generate` to run the main pipeline.
 ```bash
-gmdgen generate --audio-file my_song.wav --model gemini-2.5-flash
+gmdgen generate --audio-file my_song.wav --object-count 1500 --difficulty 0.7 --seed 123
+```
+
+#### Key Generation Options:
+* `--audio <path>`: Path to audio file for conditioning.
+* `--object-count <int>`: Target number of objects.
+* `--difficulty <float>`: Difficulty value between 0.0 and 1.0.
+* `--duration <seconds>`: Target duration of the level.
+* `--seed <int>`: Random seed for reproducibility.
+* `--no-repair`: Disable automatic structure repair.
+
+### Dataset Management
+
+Use `gmdgen train` to build or update your dataset context.
+```bash
+gmdgen train --dataset ./my_dataset --force-rebuild
+```
+
+### Validation & Repair
+
+Validate existing levels or repair structural issues.
+```bash
+# Validate a level
+gmdgen validate my_level.gmd --output validation_report.json
+
+# Repair a level
+gmdgen repair my_level.gmd --output repaired_level.gmd --report repair_report.json
 ```
 
 ## Logging & Quality Gates
@@ -41,10 +67,3 @@ gmdgen utilizes a strictly unified logging and verification pipeline to ensure m
 ## Release & Branch Strategy
 
 The `main` branch and `0.1.0` branch operate on the same release line and point to the same commit.
-
-### v0.1.0 Release Changes
-- Recovered from incorrect GUI/Ollama/OpenAI/headless legacy modifications.
-- `main` and `0.1.0` branches are fully synchronized.
-- Gemini API is now the sole supported provider.
-- Headless CLI generation works correctly without GUI-only blockage.
-- Unified, synchronous logging across console, `run.log`, and `events.jsonl`.
