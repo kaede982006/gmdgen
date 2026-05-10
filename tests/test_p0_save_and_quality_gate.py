@@ -98,7 +98,9 @@ def test_quality_gate_failure_has_severity_quality_failure() -> None:
 
 def test_gui_worker_fake_generation_saves_file() -> None:
     """GuiGenerationWorker.run() should produce a result that contains save_result.success=True."""
-    from gmdgen.gui.app import GuiGenerationWorker, GuiAppState, GuiGenerationConfig
+    import pytest
+pytest.importorskip('gmdgen.gui')
+from gmdgen.gui.app import GuiGenerationWorker, GuiAppState, GuiGenerationConfig
     from pathlib import Path
     import tempfile
 

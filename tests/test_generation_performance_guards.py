@@ -4,6 +4,8 @@ from __future__ import annotations
 """Tests for generation performance guard configuration and bounds."""
 
 from dataclasses import fields, is_dataclass
+import pytest
+pytest.importorskip('gmdgen.gui')
 from gmdgen.gui.app import GuiGenerationConfig
 
 

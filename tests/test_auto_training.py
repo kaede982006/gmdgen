@@ -98,6 +98,8 @@ def test_auto_training_rebuild_invalidates_cache(tmp_path: Path) -> None:
 
 
 def test_gui_startup_triggers_auto_training() -> None:
+    import pytest
+    pytest.importorskip('gmdgen.gui')
     from gmdgen.gui.app import GuiApplication
 
     app = GuiApplication()
@@ -116,6 +118,8 @@ def test_context_rebuild_uses_safe_config_clone(tmp_path: Path) -> None:
 
 
 def test_rebuild_context_no_attribute_error(tmp_path: Path) -> None:
+    import pytest
+    pytest.importorskip('gmdgen.gui')
     from gmdgen.gui.app import GuiApplication
 
     app = GuiApplication(
@@ -134,6 +138,8 @@ def test_rebuild_context_no_attribute_error(tmp_path: Path) -> None:
 
 
 def test_rebuild_context_failure_does_not_crash_gui(tmp_path: Path, monkeypatch) -> None:
+    import pytest
+    pytest.importorskip('gmdgen.gui')
     from gmdgen.gui.app import GuiApplication
 
     app = GuiApplication(

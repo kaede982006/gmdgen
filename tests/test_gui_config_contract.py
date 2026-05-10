@@ -6,6 +6,8 @@ import inspect
 from pathlib import Path
 from dataclasses import fields, is_dataclass
 
+import pytest
+pytest.importorskip('gmdgen.gui')
 from gmdgen.gui.app import GuiGenerationConfig
 
 

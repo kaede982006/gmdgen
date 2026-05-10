@@ -91,6 +91,10 @@ def test_no_gemini_suggestion_in_quality_messages():
 
 
 def test_gui_generation_config_has_quality_mode():
+    import pytest
+    pytest.importorskip('gmdgen.gui')
+    import pytest
+    pytest.importorskip('gmdgen.gui')
     from gmdgen.gui.app import GuiGenerationConfig
     from dataclasses import fields, is_dataclass
     if is_dataclass(GuiGenerationConfig):

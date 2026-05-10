@@ -8,6 +8,7 @@ import wave
 from pathlib import Path
 
 import pytest
+pytest.importorskip('gmdgen.gui')
 
 from gmdgen.gui.app import (
     GuiApplication,

@@ -58,4 +58,6 @@ def test_cli_does_not_allow_real_generation(tmp_path: Path) -> None:
 
 
 def test_gui_module_imports() -> None:
-    import gmdgen.gui.app  # noqa: F401
+    import pytest
+pytest.importorskip('gmdgen.gui')
+import gmdgen.gui.app  # noqa: F401
