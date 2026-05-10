@@ -1,259 +1,162 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from __future__ import annotations
-
+import sys
+import os
 import argparse
+import logging
+import time
 import json
+import uuid
 from pathlib import Path
-from typing import Any
+from datetime import datetime
+from typing import Any, Dict
 
-
-import yaml
-
-from gmdgen.gui.app import launch_gui
+from gmdgen.ai.factory import create_ai_provider_from_config
+from gmdgen.audio.analysis import analyze_audio
+from gmdgen.ai.context_index import build_context_index
 from gmdgen.generate.generator import generate_from_config
-from gmdgen.train.holdout_validator import run_holdout_validation
-from gmdgen.train.trainer import train_from_config
-from gmdgen.utils.logging import configure_logging
 
+# Global logger setup
+logger = logging.getLogger("gmdgen.cli")
 
-def _load_yaml(path: Path) -> dict[str, Any]:
-    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if payload is None:
-        return {}
-    if not isinstance(payload, dict):
-        raise TypeError(f"Config must be a mapping: {path}")
-    return payload
+class CLILogger:
+    def __init__(self, run_id: str, output_dir: Path):
+        self.run_id = run_id
+        self.output_dir = output_dir
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.log_file = self.output_dir / "run.log"
+        self.events_file = self.output_dir / "events.jsonl"
+        
+        # Setup file handler
+        fh = logging.FileHandler(self.log_file)
+        fh.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s'))
+        logging.getLogger().addHandler(fh)
 
+    def log_event(self, category: str, stage: str, message: str, progress: int = 0, level: str = "INFO"):
+        event = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "run_id": self.run_id,
+            "category": category,
+            "stage": stage,
+            "level": level,
+            "progress_percent": progress,
+            "message": message
+        }
+        with open(self.events_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+        
+        # Also print to console
+        ts = datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] [{category}] [{progress}%] {message}")
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="gmdgen",
-        description="GUI-first Geometry Dash generator (external AI API-only for real generation).",
-    )
-    parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
-
-    subparsers = parser.add_subparsers(dest="command", required=False)
-
-    subparsers.add_parser("gui", help="Launch GUI application")
-
-    train_parser = subparsers.add_parser("train", help="Train a model artifact")
-    train_parser.add_argument(
-        "--config",
-        default="configs/train.yaml",
-        help="Path to train config yaml",
-    )
-
-    generate_parser = subparsers.add_parser(
-        "generate",
-        help="Generate a new gmd file from artifact",
-    )
-    generate_parser.add_argument(
-        "--config",
-        default="configs/generate.yaml",
-        help="Path to generate config yaml",
-    )
-    generate_parser.add_argument(
-        "--prompt",
-        default=None,
-        help="Prompt text to bias generation style.",
-    )
-    generate_parser.add_argument(
-        "--audio-file",
-        "--audio",
-        dest="audio_file",
-        default=None,
-        help="Path to an audio file for audio-conditioned Geometry Dash level generation.",
-    )
-    generate_parser.add_argument(
-        "--ai-provider",
-        choices=("ollama", "ollama"),
-        default=None,
-        help="AI planning provider. Real generation requires an external AI API.",
-    )
-    generate_parser.add_argument(
-        "--test-local-provider",
-        action="store_true",
-        help="Development smoke-test mode only: use local mock provider and mark output as test-only.",
-    )
-    generate_parser.add_argument(
-        "--output",
-        default=None,
-        help="Output .gmd path. Sets output_dir and output_name.",
-    )
-    generate_parser.add_argument("--ollama-model", default=None, help="Ollama model name.")
-    generate_parser.add_argument("--low-cost-mode", action="store_true", help="Use compact low-cost AI planning.")
-    generate_parser.add_argument("--max-ai-calls", type=int, default=None, help="Maximum external AI calls per generation.")
-    generate_parser.add_argument("--ollama-context-dir", default=None, help="Directory with local context documents.")
-    generate_parser.add_argument(
-        "--ollama-reference-levels-dir",
-        default=None,
-        help="Directory with reference .gmd levels to summarize for planning.",
-    )
-    generate_parser.add_argument(
-        "--ollama-enable-retrieval",
-        action="store_true",
-        help="Use local keyword retrieval over ollama-context-dir.",
-    )
-    generate_parser.add_argument("--ollama-debug", action="store_true", help="Enable Ollama planning debug metadata.")
-    generate_parser.add_argument(
-        "--ollama-save-debug-artifacts",
-        action="store_true",
-        help="Write sanitized Ollama planning debug artifacts.",
-    )
-    generate_parser.add_argument("--ollama-debug-dir", default=None, help="Directory for Ollama debug artifacts.")
-    generate_parser.add_argument(
-        "--no-ollama-fallback",
-        action="store_true",
-        help="Raise on Ollama planning failure instead of using local fallback.",
-    )
-    generate_parser.add_argument(
-        "--export-finetune-jsonl",
-        default=None,
-        help="Append/export a structured generation example JSONL for future fine-tuning.",
-    )
-    generate_parser.add_argument(
-        "--use-ml",
-        action="store_true",
-        help="Use the trained GMD language model checkpoint instead of the symbolic pipeline.",
-    )
-    generate_parser.add_argument(
-        "--ml-ckpt",
-        default="ckpts/gmd_lm_tiny.pt",
-        help="Path to a GMDLanguageModel checkpoint (used with --use-ml).",
-    )
-    generate_parser.add_argument(
-        "--sections",
-        type=int,
-        default=4,
-        help="Number of sections to generate (used with --use-ml).",
-    )
-    generate_parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Sampling seed (used with --use-ml).",
-    )
-
-    validate_parser = subparsers.add_parser(
-        "validate",
-        help="Run hold-out validation on the dataset",
-    )
-    validate_parser.add_argument(
-        "--dataset",
-        default="dataset",
-        help="Path to the .gmd dataset directory (default: dataset)",
-    )
-    validate_parser.add_argument(
-        "--val-ratio",
-        type=float,
-        default=0.2,
-        help="Fraction of records used as validation (default 0.2)",
-    )
-    validate_parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="RNG seed for reproducible split (default 42)",
-    )
-    validate_parser.add_argument(
-        "--min-val",
-        type=int,
-        default=1,
-        help="Minimum validation records (default 1)",
-    )
-
-    return parser
-
-
-def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
-    configure_logging(verbose=bool(args.verbose))
-
-    if args.command in {None, "gui"}:
-        raise SystemExit(launch_gui())
-
-    if args.command == "train":
-        config = _load_yaml(Path(args.config))
-        result = train_from_config(config)
-
-    elif args.command == "generate":
-        if args.use_ml:
-            from gmdgen.ml.cli_runner import run_ml_generate
-            try:
-                result = run_ml_generate(
-                    ckpt_path=Path(args.ml_ckpt),
-                    output=args.output,
-                    prompt=args.prompt or "",
-                    sections=args.sections,
-                    seed=args.seed,
-                )
-            except Exception as exc:  # noqa: BLE001
-                parser.exit(1, f"error: {exc}\n")
-            print(json.dumps(result, indent=2))
-            return
-        if not args.test_local_provider:
-            parser.exit(
-                2,
-                "error: This program is GUI-only for user generation. "
-                "Run `python -m gmdgen` or `python -m gmdgen gui`.\n",
-            )
-        config = _load_yaml(Path(args.config))
-        if args.prompt is not None:
-            config["prompt"] = args.prompt
-        if args.audio_file is not None:
-            config["audio_file"] = args.audio_file
-        if args.output is not None:
-            output_path = Path(args.output)
-            config["output_dir"] = str(output_path.parent if str(output_path.parent) else Path("."))
-            config["output_name"] = output_path.stem
-        for attr in (
-            "ai_provider",
-            "ollama_model",
-            "ollama_context_dir",
-            "ollama_reference_levels_dir",
-            "ollama_debug_dir",
-            "export_finetune_jsonl",
-        ):
-            value = getattr(args, attr, None)
-            if value is not None:
-                config[attr] = value
-                if attr == "ai_provider":
-                    config["use_ai_planner"] = True
-        if args.ollama_enable_retrieval:
-            config["ollama_enable_retrieval"] = True
-        if args.low_cost_mode:
-            config["low_cost_mode"] = True
-        if args.max_ai_calls is not None:
-            config["max_ai_calls_per_generation"] = args.max_ai_calls
-        if args.ollama_debug:
-            config["ollama_debug"] = True
-        if args.ollama_save_debug_artifacts:
-            config["ollama_save_debug_artifacts"] = True
-        if args.test_local_provider:
-            config["allow_local_test_provider"] = True
-            config["ai_provider"] = "local_test_only"
-            config["generation_mode"] = "test_local_mock"
-        if args.no_ollama_fallback:
-            config["ollama_fallback_to_local"] = False
-        try:
-            result = generate_from_config(config)
-        except Exception as exc:  # noqa: BLE001
-            parser.exit(1, f"error: {exc}\n")
-
-    elif args.command == "validate":
-        result = run_holdout_validation(
-            Path(args.dataset),
-            val_ratio=args.val_ratio,
-            seed=args.seed,
-            min_val_records=args.min_val,
-        )
-
+def cmd_doctor(args):
+    print("=== gmdgen doctor ===")
+    print(f"Python: {sys.version}")
+    print(f"Root: {Path.cwd()}")
+    
+    # Check Gemini API Key
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        print("[OK] GEMINI_API_KEY found")
     else:
-        raise ValueError(f"Unknown command: {args.command}")
+        print("[ERR] GEMINI_API_KEY missing. Set it with export GEMINI_API_KEY='your-key'")
+    
+    # Check dependencies
+    try:
+        from google import genai
+        print("[OK] google-genai installed")
+    except ImportError:
+        print("[ERR] google-genai missing. Run 'pip install google-genai'")
 
-    print(json.dumps(result, indent=2))
+def cmd_train(args):
+    run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    output_dir = Path("outputs/runs") / run_id
+    cli_logger = CLILogger(run_id, output_dir)
+    
+    cli_logger.log_event("SYSTEM", "init", f"Starting train command, run_id={run_id}", 0)
+    
+    dataset_path = Path(args.dataset)
+    if not dataset_path.exists():
+        cli_logger.log_event("ERROR", "init", f"Dataset path {dataset_path} not found", 0, "ERROR")
+        return
 
+    cli_logger.log_event("TRAIN", "ingestion", f"Scanning dataset: {dataset_path}", 20)
+    
+    try:
+        index = build_context_index(
+            context_dirs=[dataset_path],
+            reference_level_dirs=[dataset_path],
+            max_context_chars=12000
+        )
+        
+        index_file = output_dir / "dataset_index.json"
+        with open(index_file, "w", encoding="utf-8") as f:
+            f.write(json.dumps(index.to_dict(), ensure_ascii=False, indent=2))
+            
+        cli_logger.log_event("TRAIN", "complete", f"Index saved to {index_file}", 100)
+    except Exception as e:
+        cli_logger.log_event("ERROR", "train", f"Training failed: {e}", 0, "ERROR")
+
+def cmd_generate(args):
+    run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    output_dir = Path("outputs/runs") / run_id
+    cli_logger = CLILogger(run_id, output_dir)
+    
+    cli_logger.log_event("SYSTEM", "init", f"Starting generate command, run_id={run_id}", 0)
+    cli_logger.log_event("CONFIG", "init", f"Provider: {args.provider}, Model: {args.model or 'gemini-2.5-flash'}", 5)
+    
+    config = {
+        "ai_provider": args.provider,
+        "gemini_model": args.model or "gemini-2.5-flash",
+        "audio_file": args.audio,
+        "output_dir": str(output_dir),
+        "run_id": run_id
+    }
+    
+    try:
+        cli_logger.log_event("AUDIO", "analysis", f"Analyzing audio: {args.audio}", 20)
+        # Actual audio analysis would be called inside generate_from_config or here
+        
+        cli_logger.log_event("PROVIDER", "call", f"Requesting {args.provider} API...", 40)
+        
+        # This calls the actual generation pipeline
+        result = generate_from_config(config)
+        
+        if result.get("success"):
+            cli_logger.log_event("OUTPUT", "save", f"Level saved to {result.get('output_path')}", 100)
+        else:
+            cli_logger.log_event("QUALITY_GATE", "failed", "Quality gate failed, saving draft only", 90, "WARNING")
+            
+    except Exception as e:
+        cli_logger.log_event("ERROR", "generate", f"Generation failed: {e}", 0, "ERROR")
+
+def main():
+    parser = argparse.ArgumentParser(description="gmdgen: Geometry Dash AI Level Generator (Gemini-first CLI)")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Doctor
+    subparsers.add_parser("doctor", help="Check environment and configuration")
+
+    # Train
+    train_p = subparsers.add_parser("train", help="Build dataset context")
+    train_p.add_argument("--dataset", default="dataset", help="Path to dataset directory")
+
+    # Generate
+    gen_p = subparsers.add_parser("generate", help="Generate a new level")
+    gen_p.add_argument("--provider", default="gemini", choices=["gemini", "ollama"], help="AI provider")
+    gen_p.add_argument("--model", help="Model name (e.g., gemini-2.5-flash)")
+    gen_p.add_argument("--audio", required=True, help="Path to audio file")
+    gen_p.add_argument("--output", default="outputs", help="Output directory")
+
+    args = parser.parse_args()
+
+    if args.command == "doctor":
+        cmd_doctor(args)
+    elif args.command == "train":
+        cmd_train(args)
+    elif args.command == "generate":
+        cmd_generate(args)
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()

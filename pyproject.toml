@@ -22,6 +22,7 @@ classifiers = [
   "Topic :: Games/Entertainment",
 ]
 dependencies = [
+    "google-genai",
   "PyYAML>=6.0",
 ]
 
@@ -35,7 +36,7 @@ ml = [
 ]
 
 [project.scripts]
-gmdgen = "gmdgen.gui.app:main"
+gmdgen = "gmdgen.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
