@@ -736,7 +736,7 @@ def launch_gui() -> int:
             self.v_audio_file = tk.StringVar()
             self.v_output_path = tk.StringVar(value=str(Path("outputs") / "generated.gmd"))
             self.v_prompt = tk.StringVar()
-            self.v_primary_provider: str = "gemini")
+            self.v_primary_provider = tk.StringVar(value="gemini")
             self.v_ollama_model = tk.StringVar(value="deprecated")
             self.v_ollama_base_url = tk.StringVar()
             self.v_use_ollama_environment_key = tk.BooleanVar(value=True)
