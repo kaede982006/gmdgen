@@ -17,6 +17,53 @@ from gmdgen.generate.generator import generate_from_config
 
 logger = logging.getLogger("gmdgen.cli")
 
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="gmdgen: Geometry Dash AI Level Generator (Gemini-first CLI)")
+
+    # Global provider options
+    parser.add_argument("--provider", default="gemini", choices=["gemini", "openai"], help="AI provider")
+    parser.add_argument("--model", help="Model name (e.g., gemini-2.5-flash)")
+    parser.add_argument("--api-key-env", default="GEMINI_API_KEY", help="Environment variable for API key")
+    parser.add_argument("--allow-fallback", action="store_true", help="Allow fallback to another provider")
+    parser.add_argument("--fallback-provider", default="openai", help="Fallback provider")
+    parser.add_argument("--no-fallback", action="store_true", help="Disable fallback")
+    parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds")
+    parser.add_argument("--max-retries", type=int, default=2, help="Max retries")
+    parser.add_argument("--no-cache", action="store_true", help="Disable caching")
+    parser.add_argument("--debug-provider", action="store_true", help="Debug provider calls")
+    parser.add_argument("--allow-low-quality-draft", action="store_true", help="Allow saving low quality drafts")
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Doctor
+    doc_p = subparsers.add_parser("doctor", help="Check environment and configuration")
+    doc_p.add_argument("--check-provider-live", action="store_true", help="Perform a live API smoke test")
+
+    # Train
+    train_p = subparsers.add_parser("train", help="Build dataset context")
+    train_p.add_argument("--dataset", default="dataset", help="Path to dataset directory")
+
+    # Generate
+    gen_p = subparsers.add_parser("generate", help="Generate a new level")
+    gen_p.add_argument("--audio", help="Path to audio file")
+    gen_p.add_argument("--output", default="outputs", help="Output directory")
+
+    # Validate
+    val_p = subparsers.add_parser("validate", help="Validate a level")
+    val_p.add_argument("input", help="Input file")
+
+    # Repair
+    rep_p = subparsers.add_parser("repair", help="Repair a level")
+    rep_p.add_argument("input", help="Input file")
+
+    # Report
+    rpt_p = subparsers.add_parser("report", help="Generate a report")
+    rpt_p.add_argument("input", help="Input file")
+
+    return parser
+
+
 class CLILogger:
     def __init__(self, run_id: str, output_dir: Path):
         self.run_id = run_id
@@ -162,7 +209,7 @@ def cmd_report(args):
     cli_logger.log_event("REPORT", "complete", "Report complete", 100, command="report")
 
 def main():
-    parser = argparse.ArgumentParser(description="gmdgen: Geometry Dash AI Level Generator (Gemini-first CLI)")
+    parser = build_parser()
     
     # Global provider options
     parser.add_argument("--provider", default="gemini", choices=["gemini", "openai"], help="AI provider")
