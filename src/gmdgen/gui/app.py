@@ -49,6 +49,7 @@ from gmdgen.validation.code_validation import run_code_validation_suite
 
 AI_PROVIDER_REQUIRED_LABEL = "Ollama does not require an API key for real generation."
 AI_GENERATOR_NOTICE = "This generator creates Geometry Dash level plans using local Ollama."
+QWEN_MODEL_NOTICE = "qwen2.5-coder:7b"
 AI_FAILURE_NOTICE = "Local generation is disabled for real level generation."
 LOCAL_TEST_NOTICE = "Low Cost mode limits API calls and uses cache."
 
