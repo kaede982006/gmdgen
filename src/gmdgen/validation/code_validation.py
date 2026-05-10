@@ -110,7 +110,6 @@ def run_code_validation_suite(
     commands = [
         [sys.executable, "-m", "compileall", str(root / "src" / "gmdgen"), str(root / "tests")],
         [sys.executable, "-c", "import gmdgen; print('import ok')"],
-        [sys.executable, "-c", "import gmdgen.gui.app; print('gui import ok')"],
     ]
     if include_pytest:
         commands.append([sys.executable, "-m", "pytest", "-q"])

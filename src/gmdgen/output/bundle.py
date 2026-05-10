@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from gmdgen.gui.app import sanitize_report
+from gmdgen.sanitize import sanitize_report
 
 def package_output_bundle(
     result: dict[str, Any],
