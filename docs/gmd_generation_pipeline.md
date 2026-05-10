@@ -1,13 +1,13 @@
 # GMD Generation Pipeline
 
-The final `.gmd` file is produced by local deterministic code. Ollama can
+The final `.gmd` file is produced by local deterministic code. Gemini can
 change planning intent, but it cannot directly write the level.
 
 ## Pipeline Order
 
 1. `UserPrompt`
 2. `GenerationConfig`
-3. `Ollama SectionPlan JSON`
+3. `Gemini SectionPlan JSON`
 4. `Local SectionIR`
 5. `LevelIR`
 6. `Group/Color Allocator`
@@ -58,7 +58,7 @@ is local deterministic behavior. Planner-provided numeric ids are invalid.
 
 The production audio-conditioned path uses the existing rich local
 `gd.plans.ObjectPlan` and `gd.plans.TriggerPlan` materializer as its runtime
-local IR. Those types are not model output. Ollama output must first pass the
+local IR. Those types are not model output. Gemini output must first pass the
 strict symbolic planner contract; direct model `object_plans` and
 `trigger_plans` are rejected before they can reach the materializer.
 

@@ -49,7 +49,7 @@ The normal expected pairing is:
 }
 ```
 
-Ollama fallback follows the same rule:
+Gemini fallback follows the same rule:
 
 ```json
 {

@@ -6,7 +6,7 @@
   level-wise validation (`final_val_perplexity=36.15`), fixed sampler
   train/inference factor mismatch, added prompt-primed candidate selection,
   and reduced hidden support repair with coverage-aware terrain placement.
-- **Emergency Hotfix: Planner Stabilization (May 9)**: Fixed `ollama_forbidden_field` errors by hardening symbolic planner prompts, adding context filtering for forbidden keywords, and improving diagnostics/reporting consistency.
+- **Emergency Hotfix: Planner Stabilization (May 9)**: Fixed `Gemini_forbidden_field` errors by hardening symbolic planner prompts, adding context filtering for forbidden keywords, and improving diagnostics/reporting consistency.
 - **Final Stabilization: Full AI Integration (May 10)**: Fixed critical bugs where symbolic section plans were ignored and AI objects were duplicated; unified IR naming conventions; integrated detailed quality metrics (structural instability penalties) and GPU acceleration paths with automatic device reporting.
 - **Real neural network**: the dataclass-only "AI" spec is replaced by
   ``GMDLanguageModel`` — a 4-layer causal Transformer (~600k parameters)
@@ -61,14 +61,14 @@
 | Fleuret §5.3 / §5.7 | ``GMDLanguageModel`` GPT-style stack |
 | Foundations of LLMs §1.1.1 | self-supervised next-token objective |
 | Foundations of LLMs §5.1.3 | nucleus + top-k decoding in ``ml.sample`` |
-| Boonstra | sampling defaults & few-shot Ollama planner prompts |
+| Boonstra | sampling defaults & few-shot Gemini planner prompts |
 | Onuoha; Smith & Rustagi | dataset audit / debiasing report |
 
 ## Compatibility
 
 - Python ≥ 3.10 (verified on 3.14).
 - Optional ML stack: ``pip install gmdgen[ml]`` (PyTorch CPU + numpy).
-- Optional runtime: Ollama with ``qwen2.5-coder:7b`` for the *symbolic*
+- Optional runtime: Gemini with ``gemini-2.5-flash`` for the *symbolic*
   planner path (not the new ML path).
 
 ## Dependencies

@@ -1,18 +1,18 @@
-# Ollama Provider
+# Gemini Provider
 
-Ollama is a strict planner provider. Its accepted output is the symbolic
+Gemini is a strict planner provider. Its accepted output is the symbolic
 `level_plan` + `sections` contract described in
-`docs/ollama_planner_architecture.md`. The provider rejects raw `.gmd`, legacy
+`docs/Gemini_planner_architecture.md`. The provider rejects raw `.gmd`, legacy
 direct `object_plans`, concrete group/color ids, scores, and validation
 verdicts.
 
-Ollama Error Codes:
-- ollama_server_unavailable
-- ollama_model_missing
-- ollama_timeout
-- ollama_network_error
-- ollama_invalid_json
-- ollama_invalid_schema
-- ollama_raw_gmd_rejected
-- ollama_empty_response
-- ollama_unknown_error
+Gemini Error Codes:
+- Gemini_server_unavailable
+- Gemini_model_missing
+- Gemini_timeout
+- Gemini_network_error
+- Gemini_invalid_json
+- Gemini_invalid_schema
+- Gemini_raw_gmd_rejected
+- Gemini_empty_response
+- Gemini_unknown_error

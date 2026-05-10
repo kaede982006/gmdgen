@@ -91,7 +91,7 @@ deterministic; `tests/test_pattern_library.py` enforces:
 
 ## Constraints
 
-- No live Ollama in pytest.
+- No live Gemini in pytest.
 - No bulk object generation through AI.
 - No Gemini/OpenAI/Claude runtime providers.
 

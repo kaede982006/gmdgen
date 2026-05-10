@@ -1,44 +1,50 @@
 # gmdgen
 
-Local Geometry Dash level generator with deterministic structure-first generation and Gemini API planning.
+gmdgen is a Gemini API-exclusive, headless CLI software for generating Geometry Dash levels using audio conditioning and AI planning.
 
-## Features
+## Features & Architecture
 
-- Gemini API-first generation (`gemini-2.5-flash` by default).
-- Deterministic and structured code generation workflow.
-- Rich realtime logging with progress percentages.
+* **Gemini API Exclusive**: This project has been fully converted to a Gemini API-only CLI software. The primary provider is Gemini, and legacy paths (Ollama, local LLMs, OpenAI, and their respective fallbacks) have been completely removed.
+* **API Key Required**: You must provide a `GEMINI_API_KEY` to run live generation.
+* **Model Selection**: You can specify the model via the `GEMINI_MODEL` environment variable or the `--model` CLI option. The recommended and default model is `gemini-2.5-flash`.
+* **Headless Operations**: All generations run headlessly. No GUI blocks or `GUI-only` requirements remain in the execution pathways.
+* **Strict POSIX Options**: The CLI adheres exclusively to Linux/POSIX-style short (`-h`, `-q`) and long (`--help`, `--provider`) options.
 
-## Usage
+## Getting Started
 
-**Set the API Key:**
+gmdgen, `gmdgen --help`, and `gmdgen -h` all print the main CLI help menu.
+
+### Verifying your Environment
+
+Use `gmdgen doctor` to check your environment, dependencies, and API key.
 ```bash
-export GEMINI_API_KEY='your-key'
-```
-
-**Run Doctor Check:**
-```bash
+# Verify your GEMINI_API_KEY and perform a live API smoke test
+export GEMINI_API_KEY='your-key-here'
 gmdgen doctor --check-provider-live
 ```
 
-**Generate Level:**
+### Generating a Level
+
+Use `gmdgen generate` to run the main pipeline. 
 ```bash
-gmdgen generate --audio song.wav --model gemini-2.5-flash
+gmdgen generate --audio-file my_song.wav --model gemini-2.5-flash
 ```
 
-**Other Commands:**
-- `gmdgen train`: Build dataset context
-- `gmdgen validate <file>`: Validate a level
-- `gmdgen repair <file>`: Repair a level
-- `gmdgen report <file>`: Generate a report
+## Logging & Quality Gates
 
-## Migration & Notes
+gmdgen utilizes a strictly unified logging and verification pipeline to ensure maximum observability and precision.
+* **Real-time Logging & Progress**: Console logs stream live in real-time, displaying category, stage, and strict percentage-based progress indicators.
+* **Unified Console and run.log**: The human-readable lines emitted to your console are identical, character-for-character, to the lines written to `outputs/runs/<id>/run.log`.
+* **events.jsonl Integrity**: The `outputs/runs/<id>/events.jsonl` file records structured JSON logs. Each event contains a `rendered_line` attribute that is guaranteed to match the exact output found in the console and `run.log`.
+* **Quality Gate Failure Policy**: If the generated level does not pass validation or contains zero objects, it will **not** be saved as `generated.gmd`. Low quality drafts will only be saved as `low_quality_draft.gmd` if you explicitly provide the `--allow-low-quality-draft` flag.
 
-* **GUI**: The old GUI is deprecated and no longer the default path.
-* **Ollama/Qwen**: Ollama and Qwen are no longer the default providers. Ollama runs locally and does not require an external API key (does not require an API key).
-* **OpenAI Fallback**: OpenAI fallback is available only when explicitly requested via `--allow-fallback --fallback-provider openai`.
-* **Output Structure**: All outputs are generated under `outputs/runs/`.
+## Release & Branch Strategy
 
-## v0.1.0 Release
+The `main` branch and `0.1.0` branch operate on the same release line and point to the same commit.
 
-* Restructured to a Gemini API-based CLI workflow.
-* Removed Ollama and GUI dependencies from the critical path.
+### v0.1.0 Release Changes
+- Recovered from incorrect GUI/Ollama/OpenAI/headless legacy modifications.
+- `main` and `0.1.0` branches are fully synchronized.
+- Gemini API is now the sole supported provider.
+- Headless CLI generation works correctly without GUI-only blockage.
+- Unified, synchronous logging across console, `run.log`, and `events.jsonl`.

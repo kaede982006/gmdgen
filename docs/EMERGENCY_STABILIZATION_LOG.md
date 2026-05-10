@@ -3,10 +3,10 @@
 - **Work Start Time:** 2026-05-10 01:25:12
 - **Git State:** 1 commit ahead of `origin/main` (local `5c13442`), tag `v0.1.0` locally on `5c13442`.
 - **Remote State:** `v0.1.0` tag on remote points to `bc74d20`.
-- **Failure Symptoms:** Ollama planner schema errors, diagnostics mismatch, persistent fallback issues, map quality instability.
+- **Failure Symptoms:** Gemini planner schema errors, diagnostics mismatch, persistent fallback issues, map quality instability.
 - **Initial Observation:** 
     - 733 tests passed, 17 skipped.
-    - Ollama server running with `qwen2.5-coder:7b`.
+    - Gemini server running with `gemini-2.5-flash`.
     - Local branch `main` is ahead of remote by 1 commit (`fix: harden planner schema fields and GPU device reporting`).
 ## Analysis of Layers
 
@@ -14,8 +14,8 @@
 - GUI calls `generate_from_config` which leads to `audio_conditioned.py`.
 - Diagnostic messages in GUI might not perfectly reflect the most recent `planner.py` logic if they rely on summarized fields that are slightly stale.
 
-### B. Ollama Provider Layer
-- **Critical Finding**: Ollama returns symbolic sections in `metadata`, but these are NEVER applied to the generation pipeline in `audio_conditioned.py`. The pipeline continues using original deterministic sections.
+### B. Gemini Provider Layer
+- **Critical Finding**: Gemini returns symbolic sections in `metadata`, but these are NEVER applied to the generation pipeline in `audio_conditioned.py`. The pipeline continues using original deterministic sections.
 - Exception handling in `_maybe_apply_ai_provider` uses `break` instead of `continue`, causing premature fallback to local deterministic generation.
 
 ### C. Planner Prompt Layer
@@ -26,7 +26,7 @@
 
 ### K. GPU/Device Layer
 - `src/gmdgen/utils/device.py` is present and used in `ml/` paths.
-- Integration in `audio_conditioned.py` records device info, but doesn't yet know if Ollama itself is using GPU.
+- Integration in `audio_conditioned.py` records device info, but doesn't yet know if Gemini itself is using GPU.
 
 ## Summary of Fixes
 
@@ -41,17 +41,17 @@
 ## Final Verification Result
 - **Unit Tests**: Passed (including new `test_generation_success.py` and `test_gpu_and_planner_hardening.py`).
 - **Mock Generation Smoke**: Success (AI sections applied, no duplication).
-- **Actual Ollama Generation**: Success (7 sections planned for 198s, `success_repaired` status, `final_success: true`).
+- **Actual Gemini Generation**: Success (7 sections planned for 198s, `success_repaired` status, `final_success: true`).
 
 ## Next Checkpoints
-- Monitor Ollama 7B behavior for extremely long songs (> 3 minutes).
+- Monitor Gemini 7B behavior for extremely long songs (> 3 minutes).
 - Consider neural materializer for finer-grained object control beyond symbolic templates.
 - Tag `v0.1.0` is ready for final push.
 
 - `git status --short --branch`
 - `git log --oneline --decorate --max-count=30`
 - `python3 -m pytest -q` (passed 733, skipped 17)
-- `ollama list` (qwen2.5-coder:7b available)
+- `Gemini list` (gemini-2.5-flash available)
 - `grep -rEn ...` (initial keyword search)
 
 ## Optimization Strategy (ML View)

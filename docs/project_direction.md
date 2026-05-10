@@ -1,6 +1,6 @@
 # Project Direction
 - Audio Analysis
-- Ollama Planning
+- Gemini Planning
 - Internal Representation
 - Materializer
 - Repairer

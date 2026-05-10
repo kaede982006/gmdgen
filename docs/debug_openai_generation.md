@@ -1,1 +1,1 @@
-Legacy/Retired. Gemini/OpenAI are not runtime providers. See ollama_provider.md.
+Legacy/Retired. Gemini/OpenAI are not runtime providers. See Gemini_provider.md.

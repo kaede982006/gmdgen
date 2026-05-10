@@ -165,7 +165,7 @@ AI가 생성한 데이터는 `ValidationReport`를 통해 검증됩니다.
 *   **참고 문헌**: *Foundation Models for Natural Language Processing (Gerhard Paaß & Sven Giesselbach)*
 *   **프로젝트 연관성**:
     *   **Autoregressive Models & GPT (Chapter 2.2)**: `gmdgen`의 객체 및 트리거 시퀀스 생성 방식은 이전 객체들의 상태를 기반으로 다음 객체를 예측하는 GPT의 자동 회귀 방식을 차용하고 있습니다.
-    *   **Retrieval-Augmented Generation (RAG) (Chapter 6.2)**: Ollama 기반 프롬프팅 파이프라인에서 `LocalKeywordRetriever`가 `dataset/` 폴더 내의 기존 레벨 패턴과 튜토리얼을 주입하는 구조는 최신 RAG 모델의 컨텍스트 강화 기법과 일치합니다.
+    *   **Retrieval-Augmented Generation (RAG) (Chapter 6.2)**: Gemini 기반 프롬프팅 파이프라인에서 `LocalKeywordRetriever`가 `dataset/` 폴더 내의 기존 레벨 패턴과 튜토리얼을 주입하는 구조는 최신 RAG 모델의 컨텍스트 강화 기법과 일치합니다.
     *   **Chain-of-Thought (CoT) Prompting**: 시스템 프롬프트에 포함된 계층적 계획(Global -> Section -> Object)은 언어 모델의 논리적 추론 능력을 극대화하기 위한 CoT 방법론의 적용 사례입니다.
 
 ### 8.3 컴퓨터 비전 및 다중 모달리티

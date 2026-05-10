@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gmdgen"
 version = "0.1.0"
-description = "Local Geometry Dash level generator with deterministic structure-first generation and optional Ollama-based AI planning."
+description = "Geometry Dash AI level generator using Gemini API."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "GPL-3.0-or-later" }

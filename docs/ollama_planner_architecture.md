@@ -1,9 +1,9 @@
-# Ollama Planner Architecture
+# Gemini planner Architecture
 
-Ollama is a symbolic planner. It describes intent; it does not generate final
+Gemini is a symbolic planner. It describes intent; it does not generate final
 Geometry Dash save data.
 
-## Allowed Ollama Responsibilities
+## Allowed Gemini Responsibilities
 
 - Convert user natural language into planning intent.
 - Produce `level_plan` and symbolic `sections`.
@@ -12,7 +12,7 @@ Geometry Dash save data.
 - Suggest repair strategy in natural language.
 - Summarize reports for the GUI.
 
-## Forbidden Ollama Responsibilities
+## Forbidden Gemini Responsibilities
 
 - Raw `.gmd` or save-string output.
 - Direct object strings such as `1,100,2,30,3,...`.
@@ -27,7 +27,7 @@ Geometry Dash save data.
 
 ## Strict JSON Contract
 
-Ollama output must be a JSON object with exactly these top-level keys:
+Gemini output must be a JSON object with exactly these top-level keys:
 
 ```json
 {

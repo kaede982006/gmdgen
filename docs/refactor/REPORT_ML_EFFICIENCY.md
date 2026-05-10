@@ -9,8 +9,8 @@ The numbers below are characterizations of the **current** code path._
 
 | Call site | Purpose | Frequency | Avg input size | Avg output size | Result usage |
 |---|---|---|---|---|---|
-| `OllamaProvider.generate_level_plan` | Strict symbolic section-plan request | 1× per candidate | structured prompt + audio summary + section plans | `level_plan` + `sections` JSON | Local IR/materializer expansion + validation |
-| `_extract_json_object` (`ollama_provider.py`) | JSON parse with repair retry | up to 2× per AI call | response body | dict | Plan conversion |
+| `GeminiProvider.generate_level_plan` | Strict symbolic section-plan request | 1× per candidate | structured prompt + audio summary + section plans | `level_plan` + `sections` JSON | Local IR/materializer expansion + validation |
+| `_extract_json_object` (`Gemini_provider.py`) | JSON parse with repair retry | up to 2× per AI call | response body | dict | Plan conversion |
 
 The call graph is shallow by design: planning is **one** model call per
 candidate, and bulk object generation is fully deterministic.
@@ -21,14 +21,14 @@ The session-snapshot redesign already inverted the AI usage pattern:
 
 | Era | Pattern | Avg AI calls per generation |
 |---|---|---|
-| Pre-redesign | Per-object Ollama suggestions | scaled with object count (≥ 1k) |
+| Pre-redesign | Per-object Gemini suggestions | scaled with object count (≥ 1k) |
 | Post-redesign | One plan call per candidate (1..5 candidates) | 1–5 |
 
 **Effective reduction: ≥ 99 % of AI calls eliminated.**
 
 ## §3 Structured output (M-3)
 
-`OllamaProvider._post` uses Ollama's `format='json'` mode (Ollama 0.1.16+)
+`GeminiProvider._post` uses Gemini's `format='json'` mode (Gemini 0.1.16+)
 combined with explicit JSON-schema instructions in the prompt. Free-text
 parsing is gated behind `extract_json_object`, which:
 
@@ -37,7 +37,7 @@ parsing is gated behind `extract_json_object`, which:
 3. Tolerates trailing commas.
 4. Retries with a repair prompt when invalid JSON is returned.
 
-Tests covering this path: `tests/test_ollama_json_recovery.py` (10 tests).
+Tests covering this path: `tests/test_Gemini_json_recovery.py` (10 tests).
 
 ## §4 Caching (M-4)
 
@@ -55,7 +55,7 @@ tests the cache hits on every call after the first.
 
 Section materialization is serial but fast (1 ms per section in the
 current path). Multiple AI candidate calls are NOT parallelized today
-because Ollama is single-process and doing so increases tail latency
+because Gemini is single-process and doing so increases tail latency
 without improving throughput. The candidate loop is still time-budgeted
 via `max_extreme_ml_seconds` (default 300 s).
 
@@ -66,7 +66,7 @@ via `max_extreme_ml_seconds` (default 300 s).
 priors over the learned `object_distributions`. Embedding-based vector
 similarity is **not** implemented in this release; the retrieval is
 frequency-ranked. A future revision may add `nomic-embed-text`-based
-top-k similarity, but this requires an additional Ollama model and is
+top-k similarity, but this requires an additional Gemini model and is
 out of scope for v0.1.0.
 
 ## §7 Best-of-N (M-7)
@@ -91,12 +91,12 @@ Tests: `tests/test_candidate_distinctness.py` (5 tests).
 
 ## Assumptions
 
-- The Ollama planner returns JSON within the configured timeout.
+- The Gemini planner returns JSON within the configured timeout.
 - Disk cache lives on a writable filesystem under the user cache dir.
 
 ## Constraints
 
-- No live Ollama call in pytest.
+- No live Gemini call in pytest.
 - No bulk object generation through AI.
 - No Gemini/OpenAI/Claude runtime providers.
 

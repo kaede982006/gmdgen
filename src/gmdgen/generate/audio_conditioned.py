@@ -1082,11 +1082,7 @@ def _maybe_apply_ai_provider(
             response = provider.generate_level_plan(request)
         except Exception as exc:
             message = sanitize_ai_error(str(exc))
-            last_error_code = getattr(exc, "code", "ollama_unknown_error")
-            # If it's a known Ollama error class, use its code
-            from gmdgen.ai.ollama_provider import OllamaProviderError
-            if isinstance(exc, OllamaProviderError):
-                last_error_code = exc.code
+            last_error_code = getattr(exc, "code", "provider_error")
             diagnostics = getattr(provider, "last_response_diagnostics", {})
             if isinstance(diagnostics, dict):
                 for key in (

@@ -9,7 +9,7 @@ Phase G is fulfilled by porting the wip session-snapshot tree as the initial 0.1
 ## origin/main vs wip — diff --stat
 
 ```
- tests/test_gui_ollama_only_surface.py              |  70 ++-
+ tests/test_gui_Gemini_only_surface.py              |  70 ++-
  tests/test_gui_quality_messages.py                 | 114 ++++
  tests/test_gui_worker.py                           |   8 +-
  tests/test_learning_feature_extractor.py           |   4 +-
@@ -22,7 +22,7 @@ Phase G is fulfilled by porting the wip session-snapshot tree as the initial 0.1
  tests/test_object_count_metadata_consistency.py    | 120 ++++
  tests/test_object_count_scaling.py                 |  96 +++
  tests/test_object_diversity.py                     |  80 +++
- tests/test_ollama_json_recovery.py                 | 140 +++++
+ tests/test_Gemini_json_recovery.py                 | 140 +++++
  tests/test_playable_skeleton_generation.py         | 118 ++++
  tests/test_preference_export.py                    |   4 +-
  tests/test_quality_draft_diagnostics.py            | 121 ++++
@@ -38,12 +38,12 @@ Phase G is fulfilled by porting the wip session-snapshot tree as the initial 0.1
 - src/gmdgen/ai/cache.py
 - src/gmdgen/ai/factory.py
 - src/gmdgen/ai/fine_tune_export.py
-- src/gmdgen/ai/ollama_provider.py
+- src/gmdgen/ai/Gemini_provider.py
 - src/gmdgen/ai/preference_export.py
 - src/gmdgen/errors.py
 - src/gmdgen/eval/__init__.py
 - src/gmdgen/eval/critic.py
-- src/gmdgen/eval/live_ollama_eval.py
+- src/gmdgen/eval/live_Gemini_eval.py
 - src/gmdgen/feedback/store.py
 - src/gmdgen/gd/plans.py
 - src/gmdgen/generate/audio_conditioned.py
@@ -74,7 +74,7 @@ Phase G is fulfilled by porting the wip session-snapshot tree as the initial 0.1
 - tests/test_object_count_metadata_consistency.py
 - tests/test_object_count_scaling.py
 - tests/test_object_diversity.py
-- tests/test_ollama_json_recovery.py
+- tests/test_Gemini_json_recovery.py
 - tests/test_playable_skeleton_generation.py
 - tests/test_quality_draft_diagnostics.py
 - tests/test_repair_loss_guard.py
@@ -112,7 +112,7 @@ Phase G is fulfilled by porting the wip session-snapshot tree as the initial 0.1
 
 ## Constraints
 
-- No live Ollama call during pytest.
+- No live Gemini call during pytest.
 - No bulk object generation through AI; AI is structured-output only.
 - No Gemini/OpenAI/Claude runtime providers.
 

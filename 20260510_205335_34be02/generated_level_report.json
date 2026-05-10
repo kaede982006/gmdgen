@@ -1,0 +1,70 @@
+{
+  "generation_mode": "style_only",
+  "ai_provider": "ollama",
+  "local_fallback_used": false,
+  "quality_gate_passed": true,
+  "artifact_missing": true,
+  "artifact_path": "artifacts/model.json",
+  "output_path": "20260510_205335_34be02/generated_level.gmd",
+  "output_file": "20260510_205335_34be02/generated_level.gmd",
+  "report_path": "20260510_205335_34be02/generated_level_report.json",
+  "report_file": "20260510_205335_34be02/generated_level_report.json",
+  "num_objects": 8,
+  "final_objects": 8,
+  "raw_objects": 8,
+  "num_sections": 0,
+  "objects": [
+    {
+      "id": 1,
+      "x": 120,
+      "y": 90
+    },
+    {
+      "id": 1,
+      "x": 150,
+      "y": 120
+    },
+    {
+      "id": 1,
+      "x": 180,
+      "y": 150
+    },
+    {
+      "id": 1,
+      "x": 210,
+      "y": 180
+    },
+    {
+      "id": 1,
+      "x": 240,
+      "y": 90
+    },
+    {
+      "id": 1,
+      "x": 270,
+      "y": 120
+    },
+    {
+      "id": 1,
+      "x": 300,
+      "y": 150
+    },
+    {
+      "id": 1,
+      "x": 330,
+      "y": 180
+    }
+  ],
+  "sections": [],
+  "score": 0.0,
+  "validation_report": {
+    "valid": true,
+    "errors": [],
+    "warnings": [
+      "artifacts/model.json was not found; used deterministic style-only release fallback"
+    ]
+  },
+  "warnings": [
+    "artifacts/model.json was not found; used deterministic style-only release fallback"
+  ]
+}

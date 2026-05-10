@@ -1,7 +1,7 @@
 # Optimization Strategy (ML View)
 
 ## 1. Goal: Error Reduction via Candidate Selection
-Since the current system uses a symbolic planner (Ollama) and a deterministic materializer, we do not perform traditional backpropagation. Instead, we use **Random Restart Search** (via `candidate_count`) to find the candidate that minimizes our multi-term "Loss Function" (represented as 1.0 - Score).
+Since the current system uses a symbolic planner (Gemini) and a deterministic materializer, we do not perform traditional backpropagation. Instead, we use **Random Restart Search** (via `candidate_count`) to find the candidate that minimizes our multi-term "Loss Function" (represented as 1.0 - Score).
 
 ## 2. Defined Losses (to be minimized)
 
@@ -34,7 +34,7 @@ Since the current system uses a symbolic planner (Ollama) and a deterministic ma
 
 - **Incorporate Structural Fixes into Scoring**: `x_monotone_fixed` should be a negative term in `AudioConditionedScore`.
 - **Differentiate AI Success from Fallback**: Candidates produced via `planner_status=fallback` must receive a massive score penalty to ensure AI success is always preferred if valid.
-- **Loss-based Feedback for Repair**: When Ollama fails, provide the specific "Loss" (error message) to the repair prompt (One-shot repair already does this).
+- **Loss-based Feedback for Repair**: When Gemini fails, provide the specific "Loss" (error message) to the repair prompt (One-shot repair already does this).
 
 ## 4. Future Gradient Descent Paths
 If we transition to a truly neural materializer:

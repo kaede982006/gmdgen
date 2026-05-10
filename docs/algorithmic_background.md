@@ -5,12 +5,12 @@ are optional planning inputs, not the source of truth.
 
 ## Core Principles
 
-1. Ollama 7B is a controlled section planner, not a `.gmd` generator.
+1. Gemini 7B is a controlled section planner, not a `.gmd` generator.
 2. Final `.gmd` creation belongs to the local deterministic pipeline.
 3. The ML starting point is clean data, typed IR, validation, and repair.
 4. Raw `.gmd` generation from the model is forbidden.
 5. GUI success means final validation and report consistency passed.
-6. Ollama fallback proves only that the app did not crash; it does not prove AI
+6. Gemini fallback proves only that the app did not crash; it does not prove AI
    generation quality.
 
 ## Dirty Data Assumption
@@ -45,19 +45,19 @@ Inconsistent data:
 
 The enforced order is:
 
-`UserPrompt` -> `GenerationConfig` -> `Ollama SectionPlan JSON` ->
+`UserPrompt` -> `GenerationConfig` -> `Gemini SectionPlan JSON` ->
 `Local SectionIR` -> `LevelIR` -> `Group/Color Allocator` ->
 `TriggerGraph` -> `Serializer` -> `SyntaxValidator` ->
 `SemanticValidator` -> `PlayabilityValidator` -> `Repairer` ->
 `Final GMD` -> `GenerationReport`.
 
-Only `GenerationConfig` and `SectionPlan` may come from Ollama. Everything
+Only `GenerationConfig` and `SectionPlan` may come from Gemini. Everything
 after that is deterministic and locally checked.
 
 ## Code Anchors
 
 - Planner contract: `src/gmdgen/ai/planner.py`
-- Strict Ollama provider boundary: `src/gmdgen/ai/ollama_provider.py`
+- Strict Gemini provider boundary: `src/gmdgen/ai/Gemini_provider.py`
 - IR dataclasses: `src/gmdgen/generate/ir.py`
 - SectionPlan to IR decoder: `src/gmdgen/generate/decoder.py`
 - Symbol allocator: `src/gmdgen/generate/allocator.py`

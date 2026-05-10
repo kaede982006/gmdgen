@@ -6,7 +6,7 @@ release operations.
 
 ## Current Role Split
 
-- Ollama is a bounded planner. `OllamaProvider.generate_level_plan` accepts
+- Gemini is a bounded planner. `GeminiProvider.generate_level_plan` accepts
   strict `level_plan` + `sections` JSON and rejects raw `.gmd`, legacy
   `object_plans`, concrete `group_id`, concrete `color_channel_id`, final
   scores, and validation verdicts.
@@ -29,29 +29,29 @@ Raw `.gmd` strings are still present at serializer and file IO boundaries:
 - `validate_gmd_file`, `round_trip_validate`, and `validate_save_string_safety`
   parse serialized output for syntax and editor safety.
 
-These raw strings are local artifacts only. They are not valid Ollama output
-and are rejected by `ai/planner.py` and `ai/ollama_provider.py`.
+These raw strings are local artifacts only. They are not valid Gemini output
+and are rejected by `ai/planner.py` and `ai/Gemini_provider.py`.
 
 ## Source of Truth
 
 The intended order is:
 
-`UserPrompt` -> `GenerationConfig` -> `Ollama SectionPlan JSON` ->
+`UserPrompt` -> `GenerationConfig` -> `Gemini SectionPlan JSON` ->
 `Local SectionIR` -> `LevelIR` -> `Group/Color Allocator` ->
 `TriggerGraph` -> `Serializer` -> `SyntaxValidator` ->
 `SemanticValidator` -> `PlayabilityValidator` -> `Repairer` ->
 `Final GMD` -> `GenerationReport`.
 
-Ollama is allowed only up to `GenerationConfig` and `SectionPlan`. Concrete
+Gemini is allowed only up to `GenerationConfig` and `SectionPlan`. Concrete
 group ids, color channels, trigger target ids, final scoring, playability
 verdicts, report consistency, and serialization are local responsibilities.
 
 ## Legacy Compatibility Adapter
 
-`AILevelPlanResponse` still exists for migration tests and non-Ollama internal
+`AILevelPlanResponse` still exists for migration tests and non-Gemini internal
 adapters. Its direct `object_plans` and `trigger_plans` fields are deprecated
-compatibility fields, not production Ollama output and not report source of
-truth. The Ollama provider and production audio path reject model-provided
+compatibility fields, not production Gemini output and not report source of
+truth. The Gemini provider and production audio path reject model-provided
 object plans before they can reach the materializer.
 
 ## Fallback Risk
@@ -90,7 +90,7 @@ The GUI now maps generation reports into one of these states:
 
 - `final_success`: syntax, semantic, playability, quality, and report checks
   passed without planner fallback.
-- `fallback_draft`: Ollama failed or returned invalid planner output; a
+- `fallback_draft`: Gemini failed or returned invalid planner output; a
   deterministic draft exists for inspection only.
 - `low_quality_draft`: output was saved, but validation or the quality gate
   failed.
