@@ -34,7 +34,7 @@ gmdgen generate --audio song.wav --model gemini-2.5-flash
 ## Migration & Notes
 
 * **GUI**: The old GUI is deprecated and no longer the default path.
-* **Ollama/Qwen**: Ollama and Qwen are no longer the default providers.
+* **Ollama/Qwen**: Ollama and Qwen are no longer the default providers. Ollama runs locally and does not require an external API key (does not require an API key).
 * **OpenAI Fallback**: OpenAI fallback is available only when explicitly requested via `--allow-fallback --fallback-provider openai`.
 * **Output Structure**: All outputs are generated under `outputs/runs/`.
 

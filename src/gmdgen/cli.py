@@ -22,7 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="gmdgen: Geometry Dash AI Level Generator (Gemini-first CLI)")
 
     # Global provider options
-    parser.add_argument("--provider", default="gemini", choices=["gemini", "openai"], help="AI provider")
+    parser.add_argument("--provider", default="gemini", choices=["gemini", "openai", "ollama"], help="AI provider")
+    # historical alias used in some tests/docs
+    parser.add_argument("--ai-provider", dest="provider", choices=["gemini", "openai", "ollama"], help="(alias) AI provider")
     parser.add_argument("--model", help="Model name (e.g., gemini-2.5-flash)")
     parser.add_argument("--api-key-env", default="GEMINI_API_KEY", help="Environment variable for API key")
     parser.add_argument("--allow-fallback", action="store_true", help="Allow fallback to another provider")
@@ -49,6 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     gen_p.add_argument("--audio-file", "--audio", dest="audio_file", help="Path to audio file")
     gen_p.add_argument("--config", dest="config", help="Path to generation config file (YAML)")
     gen_p.add_argument("--test-local-provider", dest="test_local_provider", action="store_true", help="Run generate with local test provider and print JSON to stdout (testing)")
+    # accept historical alias after subcommand as well
+    gen_p.add_argument("--ai-provider", dest="provider", choices=["gemini", "openai", "ollama"], help="(alias) AI provider")
     gen_p.add_argument("--output", "--output-dir", dest="output_dir", default="outputs", help="Output directory")
 
     # Validate
@@ -157,6 +161,11 @@ def cmd_train(args):
     cli_logger.log_event("TRAIN", "complete", "Training complete", 100, command="train")
 
 def cmd_generate(args):
+    # In headless/test environments, disallow real user-triggered generation (GUI-only)
+    if os.environ.get("GMDGEN_HEADLESS", "").strip() == "1" and not getattr(args, "test_local_provider", False):
+        sys.stderr.write("GUI-only for user generation\n")
+        sys.exit(2)
+
     # Support a test mode where a single-run JSON output is printed for CI tests
     if getattr(args, "test_local_provider", False) or getattr(args, "config", None) is not None:
         cfg = {}
