@@ -192,7 +192,7 @@ def extract_json_object(text: str) -> dict[str, Any] | list[Any]:
 @dataclass
 class OllamaProvider(LevelGenerationAIProvider):
     model: str = "gmdgen-coder"
-    base_url: str = "http://localhost:11434"
+    base_url: str = ""
     client: Any = None
     timeout_seconds: float = 60.0
     max_retries: int = 1
@@ -206,7 +206,7 @@ class OllamaProvider(LevelGenerationAIProvider):
     def __init__(
         self,
         model: str = "gmdgen-coder",
-        base_url: str = "http://localhost:11434",
+        base_url: str = "",
         client: Any = None,
         timeout_seconds: float = 60.0,
         max_retries: int = 1,
@@ -219,7 +219,7 @@ class OllamaProvider(LevelGenerationAIProvider):
         **_: Any,
     ) -> None:
         self.model = model or "gmdgen-coder"
-        self.base_url = (base_url or "http://localhost:11434").rstrip("/")
+        self.base_url = (base_url or "").rstrip("/")
         self.client = client
         self.timeout_seconds = float(timeout_seconds)
         self.max_retries = int(max_retries)

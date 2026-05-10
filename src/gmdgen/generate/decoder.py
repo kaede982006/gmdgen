@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from gmdgen.generate.ir import GMDObjectIR, LevelIR, LevelPlan, SectionIR, SectionPlan, TriggerIR
+from gmdgen.generate.ir import GMDObjectIR, LevelIR, SectionIR, TriggerIR
+from gmdgen.types import LevelPlan
+from gmdgen.gd.plans import SectionPlan
 
 
 def section_plan_to_ir(plan: SectionPlan) -> SectionIR:

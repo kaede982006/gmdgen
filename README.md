@@ -1,220 +1,44 @@
 # gmdgen
 
-A local Geometry Dash level (`.gmd`) generator with deterministic
-structure-first generation and optional Ollama-based AI planning.
+Local Geometry Dash level generator with deterministic structure-first generation and Gemini API planning.
 
-The runtime AI provider is **Ollama only**. Gemini, OpenAI, and other
-cloud providers are intentionally not supported as runtime providers.
-Ollama is used only as a strict section planner. It may return `level_plan`
-and symbolic `sections` JSON, but it may not return raw `.gmd` save strings,
-concrete group ids, concrete color channel ids, final scores, or validation
-verdicts. Deterministic local IR, allocation, serialization, validation,
-repair, and report consistency decide whether a final `.gmd` exists.
+## Features
 
-Architecture references:
-
-- `docs/AI/AI_GMD_GENERATION_GUIDE.md` (Technical ML Expert Guide)
-- `docs/algorithmic_background.md`
-- `docs/ollama_planner_architecture.md`
-- `docs/gmd_generation_pipeline.md`
-- `docs/generation_report_contract.md`
-- `docs/data_cleaning_and_pattern_schema.md`
-
-## Installation
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install .          # core (deterministic + Ollama planner)
-python -m pip install ".[ml]"    # adds the trained GMD language model (torch + numpy)
-```
-
-Recommended Ollama model: `qwen2.5-coder:7b`.
-
-## Quickstart — AI baseline (`--use-ml`)
-
-```bash
-# 1) train the tiny GMD language model on dataset/  (~30s on CPU)
-python -m gmdgen.ml.train --in dataset --out ckpts/gmd_lm_tiny.pt \
-    --max-steps 600 --batch 8 --ctx 256
-
-# 2) sample a real .gmd from the trained checkpoint
-python -m gmdgen generate --use-ml \
-    --ml-ckpt ckpts/gmd_lm_tiny.pt \
-    --prompt "energetic neon ship at 140bpm" \
-    --seed 7 --sections 4 --output outputs/ml_demo.gmd
-
-# 3) measure quality
-python -m gmdgen.eval.metrics --ckpt ckpts/gmd_lm_tiny.pt \
-    --in dataset --samples 8 --out reports/eval.json
-```
-
-See ``docs/refactor/AI_BASELINE_v0.1.0.md`` for the architecture, training
-recipe, and PDF → code mapping. Generated checkpoints and evaluation reports
-are runtime/release artifacts, not tracked source files.
-
-## Running with Ollama
-
-`gmdgen` uses [Ollama](https://ollama.com/) as its local inference backend.
-All AI calls go through the Ollama HTTP API; no cloud provider is required.
-Deterministic generation also works with Ollama unavailable. In that case
-`gmdgen` may save a fallback draft, but fallback is degraded mode, not AI
-generation quality success.
-
-### 1. Install Ollama
-
-| Platform | Command |
-|---|---|
-| Linux    | `curl -fsSL https://ollama.com/install.sh \| sh` |
-| macOS    | `brew install ollama` *or* download from [ollama.com](https://ollama.com) |
-| Windows  | Download the installer from <https://ollama.com/download> |
-
-Verify:
-
-```bash
-ollama --version
-```
-
-### 2. Pull the planner model
-
-`gmdgen` uses one model for level planning (structured JSON output).
-
-```bash
-ollama pull qwen2.5-coder:7b
-```
-
-Alternatives:
-
-- `qwen2.5-coder:3b` — smaller, lower memory; faster on CPU
-- `qwen2.5:7b` — generic chat variant if `coder` is unavailable
-
-### 3. Start the Ollama server
-
-Most installs auto-start the server. If not:
-
-```bash
-# Linux (systemd, system-wide)
-sudo systemctl enable --now ollama
-
-# Linux (user, no sudo) — fallback foreground
-ollama serve
-
-# macOS
-brew services start ollama
-
-# Windows
-# Ollama runs as a tray app after install; no command needed.
-```
-
-Recommended environment for `ollama serve` (set before starting):
-
-| Variable | Suggested | Why |
-|---|---|---|
-| `OLLAMA_HOST` | `127.0.0.1:11434` | Default; change if you bind elsewhere |
-| `OLLAMA_KEEP_ALIVE` | `30m` | Keeps model resident → no cold start |
-| `OLLAMA_NUM_PARALLEL` | `2` | Matches gmdgen's typical concurrency |
-| `OLLAMA_MAX_LOADED_MODELS` | `1` | Single planner model stays hot |
-
-Quick sanity check:
-
-```bash
-curl -s http://127.0.0.1:11434/api/tags | python -m json.tool
-```
-
-### 4. Point `gmdgen` at your Ollama instance
-
-`gmdgen` reads the following environment variables (verified against the code):
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OLLAMA_HOST` | `http://127.0.0.1:11434` (Ollama default) | Ollama HTTP endpoint; the GUI also exposes a "Use OLLAMA_HOST env" checkbox |
-| `GMDGEN_DATASET_DIR` | `dataset` | Reference levels directory used by the learning store |
-| `GMDGEN_HEADLESS` | unset | Set to `1` to force headless mode (skip Tk init) |
-| `RUN_OLLAMA_LIVE_TESTS` | unset | Set to `1` to enable optional live-Ollama test paths (off in CI) |
-| `GMDGEN_CACHE_DIR` | `~/.cache/gmdgen` | Base directory for logs, LLM disk cache, and other cache artifacts |
-| `GMDGEN_NO_PROGRESS` | unset | Set to `1` to disable progress bars even in TTYs |
-| `GMDGEN_LOG_LEVEL` | `1` | 0=quiet, 1=normal, 2=verbose, 3=trace |
-
-
-Model selection and other generation parameters (Ollama model name, candidate
-count, object multiplier, quality mode, etc.) are configured through the GUI
-or via `GuiGenerationConfig`, not through environment variables.
-
-Example (POSIX):
-
-```bash
-export OLLAMA_HOST=http://127.0.0.1:11434
-export GMDGEN_DATASET_DIR=/path/to/your/reference/levels
-python -m gmdgen
-```
-
-Example (Windows PowerShell):
-
-```powershell
-$env:OLLAMA_HOST = "http://127.0.0.1:11434"
-$env:GMDGEN_DATASET_DIR = "C:\path\to\references"
-python -m gmdgen
-```
-
-### 5. Troubleshooting
-
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `connection refused :11434` | Ollama not running | Start the server (step 3) |
-| First call takes 30+ s | Cold model load | Set `OLLAMA_KEEP_ALIVE=30m` |
-| `model 'X' not found` | Model not pulled | `ollama pull X` |
-| Output is free-form text, not JSON | Model lacks JSON-mode | Use `qwen2.5-coder:7b` |
-| OOM on 8 GB RAM | Planner model too large | Use `qwen2.5-coder:3b` |
-| Slow on CPU only | Expected | Use a 3B model or enable GPU per Ollama docs |
-
-For deeper tuning (GPU layers, quantization, custom Modelfiles), see the
-[Ollama documentation](https://github.com/ollama/ollama/blob/main/docs/).
+- Gemini API-first generation (`gemini-2.5-flash` by default).
+- Deterministic and structured code generation workflow.
+- Rich realtime logging with progress percentages.
 
 ## Usage
 
+**Set the API Key:**
 ```bash
-python -m gmdgen          # GUI
-python -m pytest -q       # full test suite (no live Ollama required)
+export GEMINI_API_KEY='your-key'
 ```
 
-## Quality model (HSR)
-
-`gmdgen` uses a local structure-first pipeline. Ollama emits only symbolic
-planning JSON; local code decodes it into IR, allocates group and color ids,
-serializes the level, validates syntax/semantics/playability, repairs allowed
-local defects, and checks report consistency. A quality score is one input to
-the gate, not the sole quality verdict.
-
-Low-quality drafts are failure-analysis artifacts. They are intentionally
-reported separately from final success.
-
-## Logging & observability
-
-Set `GMDGEN_LOG_LEVEL` to one of `0` (quiet), `1` (normal — default),
-`2` (verbose), `3` (trace). Structured JSONL logs are written to
-`~/.cache/gmdgen/logs/<run_id>.jsonl` for every run. Progress bars
-auto-silence in non-TTY environments.
-
-## Dataset
-
-`dataset/` is intentionally empty in the released package; users provide
-their own reference `.gmd` files. With an empty dataset, the generator uses a
-built-in safe palette and motif families. With a populated dataset, learned
-palettes and density profiles are used as priors. Dataset cleaning is
-report-first and non-destructive.
-
-## License
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version. See [LICENSE](LICENSE).
-
-## Verification
-
+**Run Doctor Check:**
 ```bash
-python -m pytest -q
+gmdgen doctor --check-provider-live
 ```
 
-Expected: the full suite passes without live Ollama. Optional static tools such
-as `ruff`, `mypy`, and `pyright` are skipped or warned when not installed;
-compile and import failures remain hard failures.
+**Generate Level:**
+```bash
+gmdgen generate --audio song.wav --model gemini-2.5-flash
+```
+
+**Other Commands:**
+- `gmdgen train`: Build dataset context
+- `gmdgen validate <file>`: Validate a level
+- `gmdgen repair <file>`: Repair a level
+- `gmdgen report <file>`: Generate a report
+
+## Migration & Notes
+
+* **GUI**: The old GUI is deprecated and no longer the default path.
+* **Ollama/Qwen**: Ollama and Qwen are no longer the default providers.
+* **OpenAI Fallback**: OpenAI fallback is available only when explicitly requested via `--allow-fallback --fallback-provider openai`.
+* **Output Structure**: All outputs are generated under `outputs/runs/`.
+
+## v0.1.0 Release
+
+* Restructured to a Gemini API-based CLI workflow.
+* Removed Ollama and GUI dependencies from the critical path.

@@ -118,8 +118,8 @@ class GuiGenerationConfig:
     audio_file: str
     output_path: str
     prompt: str = ""
-    primary_provider: str = "ollama"
-    ollama_model: str = "qwen2.5-coder:7b"
+    primary_provider: str = "gemini"
+    ollama_model: str = "deprecated"
     ollama_base_url: str = ""
     use_ollama_environment_key: bool = True
     level_name: str = "generated_level"
@@ -735,8 +735,8 @@ def launch_gui() -> int:
             self.v_audio_file = tk.StringVar()
             self.v_output_path = tk.StringVar(value=str(Path("outputs") / "generated.gmd"))
             self.v_prompt = tk.StringVar()
-            self.v_primary_provider = tk.StringVar(value="ollama")
-            self.v_ollama_model = tk.StringVar(value="qwen2.5-coder:7b")
+            self.v_primary_provider: str = "gemini")
+            self.v_ollama_model = tk.StringVar(value="deprecated")
             self.v_ollama_base_url = tk.StringVar()
             self.v_use_ollama_environment_key = tk.BooleanVar(value=True)
             self.v_level_name = tk.StringVar(value="generated_level")
@@ -1150,8 +1150,8 @@ def launch_gui() -> int:
                 audio_file=self.v_audio_file.get().strip(),
                 output_path=self.v_output_path.get().strip(),
                 prompt=self.v_prompt.get().strip(),
-                primary_provider=self.v_primary_provider.get().strip() or "ollama",
-                ollama_model=self.v_ollama_model.get().strip() or "qwen2.5-coder:7b",
+                primary_provider: str = "gemini",
+                ollama_model=self.v_ollama_model.get().strip() or "deprecated",
                 ollama_base_url=self.v_ollama_base_url.get().strip(),
                 use_ollama_environment_key=bool(self.v_use_ollama_environment_key.get()),
                 level_name=self.v_level_name.get().strip() or "generated_level",
