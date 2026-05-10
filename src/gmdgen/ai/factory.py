@@ -24,10 +24,19 @@ def create_ai_provider_from_config(config: dict[str, Any] | None = None) -> Leve
                 raise NotImplementedError("OpenAI provider stub")
         return OpenAIFallbackProvider()
     
-    if provider_name == "ollama":
-        logger.warning("Ollama provider is deprecated. Using Gemini instead or failing if explicitly required.")
-        # We don't default to ollama.
-        # Fallthrough to Gemini
+    # If an explicit Ollama client is provided in the config, construct an OllamaProvider
+    if cfg.get("ollama_client") is not None or provider_name == "ollama":
+        try:
+            from gmdgen.ai.ollama_provider import OllamaProvider
+            return OllamaProvider(
+                model=cfg.get("ollama_model", cfg.get("model", "gmdgen-coder")),
+                base_url=cfg.get("ollama_base_url", ""),
+                client=cfg.get("ollama_client"),
+                timeout_seconds=float(cfg.get("ai_timeout_seconds", 60.0)),
+                max_retries=int(cfg.get("ai_retry_count", 1)),
+            )
+        except Exception:
+            logger.exception("Failed to construct OllamaProvider from config; falling back to Gemini")
 
     return GeminiProvider(
         model=cfg.get("gemini_model", cfg.get("model", "gemini-2.5-flash")),
