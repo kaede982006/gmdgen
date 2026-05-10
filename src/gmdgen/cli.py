@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--debug-provider", action="store_true", help="Debug provider calls")
     parser.add_argument("--allow-low-quality-draft", action="store_true", help="Allow saving low quality drafts")
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=False)
 
     # Doctor
     doc_p = subparsers.add_parser("doctor", help="Check environment and configuration")
@@ -234,6 +234,17 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.command is None:
+        # No command provided — prefer launching GUI (or GUI main) for default entrypoint
+        try:
+            from gmdgen.gui import app as gui_app
+            gui_app.main()
+            return
+        except Exception:
+            # Fall back to showing help
+            parser.print_help()
+            return
+
     if args.command == "doctor":
         cmd_doctor(args)
     elif args.command == "train":
@@ -247,13 +258,6 @@ def main():
     elif args.command == "report":
         cmd_report(args)
 
-        cmd_generate(args)
-    elif args.command == "validate":
-        cmd_validate(args)
-    elif args.command == "repair":
-        cmd_repair(args)
-    elif args.command == "report":
-        cmd_report(args)
 
 if __name__ == "__main__":
     main()
