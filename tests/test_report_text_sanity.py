@@ -9,7 +9,14 @@ from pathlib import Path
 
 
 def _gui_text() -> str:
-    return Path("src/gmdgen/gui/app.py").read_text(encoding="utf-8")
+    src = Path("src/gmdgen/gui/app.py")
+    if src.exists():
+        return src.read_text(encoding="utf-8")
+    # GUI moved to archive during refactor; fall back to archived copy for source checks
+    alt = Path("archive/removed_gui/gui/app.py")
+    if alt.exists():
+        return alt.read_text(encoding="utf-8")
+    raise FileNotFoundError("GUI source not found in expected locations")
 
 
 def _errors_text() -> str:
