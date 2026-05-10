@@ -25,7 +25,7 @@ def create_ai_provider_from_config(config: dict[str, Any] | None = None) -> Leve
         return OpenAIFallbackProvider()
     
     # If an explicit Ollama client is provided in the config, construct an OllamaProvider
-    if cfg.get("ollama_client") is not None or provider_name == "ollama":
+    if cfg.get("ollama_client") is not None:
         try:
             from gmdgen.ai.ollama_provider import OllamaProvider
             return OllamaProvider(

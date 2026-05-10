@@ -47,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Generate
     gen_p = subparsers.add_parser("generate", help="Generate a new level")
     gen_p.add_argument("--audio-file", "--audio", dest="audio_file", help="Path to audio file")
+    gen_p.add_argument("--config", dest="config", help="Path to generation config file (YAML)")
+    gen_p.add_argument("--test-local-provider", dest="test_local_provider", action="store_true", help="Run generate with local test provider and print JSON to stdout (testing)")
     gen_p.add_argument("--output", "--output-dir", dest="output_dir", default="outputs", help="Output directory")
 
     # Validate
@@ -155,6 +157,26 @@ def cmd_train(args):
     cli_logger.log_event("TRAIN", "complete", "Training complete", 100, command="train")
 
 def cmd_generate(args):
+    # Support a test mode where a single-run JSON output is printed for CI tests
+    if getattr(args, "test_local_provider", False) or getattr(args, "config", None) is not None:
+        cfg = {}
+        if getattr(args, "config", None):
+            try:
+                import yaml
+                cfg_text = Path(args.config).read_text(encoding="utf-8")
+                cfg = yaml.safe_load(cfg_text) or {}
+            except Exception:
+                cfg = {}
+        if getattr(args, "audio_file", None):
+            cfg["audio_file"] = str(args.audio_file)
+        if getattr(args, "test_local_provider", False):
+            cfg["ai_provider"] = "local_test_only"
+            cfg["allow_local_test_provider"] = True
+        # Call internal generate function and emit JSON to stdout for tests
+        result = generate_from_config(cfg)
+        print(json.dumps(result))
+        return
+
     run_id, output_dir = get_run_id_and_dir()
     cli_logger = CLILogger(run_id, output_dir)
     cli_logger.log_event("SYSTEM", "init", f"run_id={run_id} command=generate started", 0, command="generate")
