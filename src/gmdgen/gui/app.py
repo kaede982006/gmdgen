@@ -1151,7 +1151,7 @@ def launch_gui() -> int:
                 audio_file=self.v_audio_file.get().strip(),
                 output_path=self.v_output_path.get().strip(),
                 prompt=self.v_prompt.get().strip(),
-                primary_provider: str = "gemini",
+                primary_provider=self.v_primary_provider.get().strip() or "gemini",
                 ollama_model=self.v_ollama_model.get().strip() or "deprecated",
                 ollama_base_url=self.v_ollama_base_url.get().strip(),
                 use_ollama_environment_key=bool(self.v_use_ollama_environment_key.get()),
